@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -55,32 +54,23 @@ func Validator() middleware.Middleware {
 		return func(ctx context.Context, req interface{}) (reply interface{}, err error) {
 			if _err := validate.Struct(req); _err != nil {
 				if fieldErrors, ok := (_err).(validator.ValidationErrors); ok {
-					var errBuffer bytes.Buffer
-					var customErrBuffer bytes.Buffer
 					for _, fieldError := range fieldErrors {
-						// NOTE: 调用翻译时取的值是 Field 属性的数据，由于前面的注册函数把这个值改成了errMsg tag 对应的值，所以这里翻译后要替换一下
+						var errMsg string
 						translateValue := fieldError.Translate(trans)
-						translateValue = strings.Replace(translateValue, fieldError.Field(), fieldError.StructField(), 1)
-						errBuffer.WriteString(fieldError.StructNamespace())
-						errBuffer.WriteString(":")
-						errBuffer.WriteString(translateValue)
-						errBuffer.WriteString(",")
-
-						// NOTE: 不相等说明自定义了 errMsg
-						if fieldError.StructField() != fieldError.Field() {
-							customErrBuffer.WriteString(fieldError.Field())
-							break
+						// NOTE: Field() 和 StructField() 不相等说明取到了 errMsg tag 值
+						if fieldError.Field() != fieldError.StructField() {
+							// NOTE: 翻译时取的值是 Field()，由于前面 RegisterTagNameFunc 取的是 errMsg tag 对应的值，所以这里翻译后要替换成 StructField()
+							translateValue = strings.Replace(translateValue, fieldError.Field(), fieldError.StructField(), 1)
+							errMsg = fieldError.Field()
 						}
+						_fieldError := errors.New(fmt.Sprintf("%s:%s", fieldError.StructNamespace(), translateValue))
+						if errMsg != "" {
+							return nil, status.ErrorWithMsg(_fieldError, ecode.StatusInvalidRequest, errMsg)
+						}
+						return nil, status.Error(_fieldError, ecode.StatusInvalidRequest)
 					}
-					errText := errBuffer.String()
-					if errText != "" {
-						errText = strings.TrimSuffix(errBuffer.String(), ",")
-					}
-					if customErrBuffer.String() != "" {
-						return nil, status.ErrorWithMsg(errors.New(errText), ecode.StatusInvalidRequest, customErrBuffer.String())
-					}
-					return nil, status.Error(errors.New(errText), ecode.StatusInvalidRequest)
 				}
+				return nil, status.Error(_err, ecode.StatusInvalidRequest)
 			}
 			return handler(ctx, req)
 		}

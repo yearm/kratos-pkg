@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"github.com/go-playground/locales/zh"
 	ut "github.com/go-playground/universal-translator"
 	"github.com/go-playground/validator/v10"
@@ -11,18 +12,23 @@ import (
 	"github.com/kataras/iris/v12"
 	iriscontext "github.com/kataras/iris/v12/context"
 	"github.com/sirupsen/logrus"
+	"reflect"
 	"strings"
 	"time"
 )
 
 var (
 	// validate ...
-	validate = validator.New()
+	validate *validator.Validate
 	trans    ut.Translator
 )
 
 // init ...
 func init() {
+	validate = validator.New()
+	validate.RegisterTagNameFunc(func(field reflect.StructField) string {
+		return field.Tag.Get("errMsg")
+	})
 	zhT := zh.New()
 	uni := ut.New(zhT, zhT)
 	trans, _ = uni.GetTranslator("zh")
@@ -48,28 +54,53 @@ func NewContext(ctx iris.Context) *Context {
 }
 
 // ReadJSONValid ...
+// Deprecated: Use ReadJSONValidate
 func (c *Context) ReadJSONValid(outPtr interface{}) error {
-	if err := c.Context.ReadJSON(outPtr); err != nil {
+	if err := c.ReadJSON(outPtr); err != nil {
 		return err
 	}
-	if err := validate.Struct(outPtr); err != nil {
-		if e, ok := (err).(validator.ValidationErrors); ok {
-			var errBuffer bytes.Buffer
-			for k, v := range e.Translate(trans) {
-				errBuffer.WriteString(k)
-				errBuffer.WriteString(":")
-				errBuffer.WriteString(v)
-				errBuffer.WriteString(",")
+	_, err := c.validateStruct(outPtr)
+	return err
+}
+
+// ReadJSONValidate true: error is errMsg tag message
+func (c *Context) ReadJSONValidate(outPtr interface{}) (customized bool, err error) {
+	if err = c.ReadJSON(outPtr); err != nil {
+		return
+	}
+	return c.validateStruct(outPtr)
+}
+
+// ReadQueryValidate true: error is errMsg tag message
+func (c *Context) ReadQueryValidate(ptr interface{}) (customized bool, err error) {
+	if err = c.ReadQuery(ptr); err != nil {
+		return
+	}
+	return c.validateStruct(ptr)
+}
+
+// ValidateStruct ...
+func (c *Context) validateStruct(ptr interface{}) (customized bool, err error) {
+	if err = validate.Struct(ptr); err != nil {
+		if fieldErrors, ok := (err).(validator.ValidationErrors); ok {
+			for _, fieldError := range fieldErrors {
+				var errMsg string
+				translateValue := fieldError.Translate(trans)
+				// NOTE: Field() 和 StructField() 不相等说明取到了 errMsg tag 值
+				if fieldError.Field() != fieldError.StructField() {
+					// NOTE: 翻译时取的值是 Field()，由于前面 RegisterTagNameFunc 取的是 errMsg tag 对应的值，所以这里翻译后要替换成 StructField()
+					translateValue = strings.Replace(translateValue, fieldError.Field(), fieldError.StructField(), 1)
+					errMsg = fieldError.Field()
+				}
+				if errMsg != "" {
+					return true, errors.New(errMsg)
+				}
+				return false, errors.New(fmt.Sprintf("%s:%s", fieldError.StructNamespace(), translateValue))
 			}
-			errText := errBuffer.String()
-			if errBuffer.String() != "" {
-				errText = strings.TrimSuffix(errBuffer.String(), ",")
-			}
-			return errors.New(errText)
 		}
-		return err
+		return
 	}
-	return nil
+	return
 }
 
 // GetLimitAndOffset ...
