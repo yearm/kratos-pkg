@@ -1,11 +1,11 @@
 package xiris
 
 import (
-	jsoniter "github.com/json-iterator/go"
 	"github.com/kataras/iris/v12"
 	iriscontext "github.com/kataras/iris/v12/context"
 	"github.com/yearm/kratos-pkg/ecode"
 	"net/http"
+	"sync"
 )
 
 var (
@@ -37,36 +37,22 @@ func RegisterOnErrorCode(app *iris.Application, codes ...int) {
 	}
 }
 
-// LogParam ...
-type LogParam func(ctx *Context) string
+var (
+	defaultLogValuers = make(map[string]LogValuer)
+	logValuerOnce     = new(sync.Once)
+)
 
-// RegisterRenderLogParams ...
-func RegisterRenderLogParams(app *iris.Application, ms map[string]LogParam) {
-	for key, val := range ms {
-		app.Configure(iris.WithOtherValue(key, val))
-	}
+// LogValuer ...
+type LogValuer func(ctx *Context) interface{}
+
+// RegisterLogValuers ...
+func RegisterLogValuers(ms map[string]LogValuer) {
+	logValuerOnce.Do(func() {
+		defaultLogValuers = ms
+	})
 }
 
-// LogParamHeaders ...
-func LogParamHeaders(names []string) LogParam {
-	return func(ctx *Context) string {
-		hsMap := make(map[string]interface{})
-		for _, name := range names {
-			hsMap[name] = ctx.GetHeader(name)
-		}
-		hs, _ := jsoniter.MarshalToString(hsMap)
-		return hs
-	}
-}
-
-// logParams ...
-func logParams(app iriscontext.Application) map[string]LogParam {
-	ms := make(map[string]LogParam)
-	others := app.ConfigurationReadOnly().GetOther()
-	for key, val := range others {
-		if param, ok := val.(LogParam); ok {
-			ms[key] = param
-		}
-	}
-	return ms
+// logValuers ...
+func logValuers() map[string]LogValuer {
+	return defaultLogValuers
 }

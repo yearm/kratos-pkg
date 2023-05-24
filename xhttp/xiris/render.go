@@ -116,9 +116,8 @@ func (c *Context) log(result *result.Result) {
 	if cRouter := c.GetCurrentRoute(); cRouter != nil {
 		params["path"] = cRouter.Path()
 	}
-	logParamMap := logParams(c.Application())
-	for key, param := range logParamMap {
-		params[key] = param(c)
+	for key, valuer := range logValuers() {
+		params[key] = valuer(c)
 	}
 
 	_result := map[string]interface{}{
