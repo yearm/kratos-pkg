@@ -79,7 +79,16 @@ func NewWithMsgFromRPCError(err error) *Result {
 }
 
 // ErrorIs ...
+// Deprecated: Use StatusIs
 func ErrorIs(r *Result, status ecode.Status) bool {
+	if r == nil {
+		return false
+	}
+	return r.Status == status
+}
+
+// StatusIs ...
+func StatusIs(r *Result, status ecode.Status) bool {
 	if r == nil {
 		return false
 	}
