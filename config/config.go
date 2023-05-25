@@ -13,10 +13,10 @@ import (
 )
 
 var (
-	runtimeConfPath = *flag.String("runtime", "./config/runtime.config.json", "runtime config file path")
-	defaultConfPath = *flag.String("default", "./config/default.json", "default config file path")
-	localConfPath   = *flag.String("local", "./config/local.json", "local config file path")
-	aliyunConfPath  = *flag.String("aliyun", "./config/aliyun.json", "aliyun mse config file path")
+	runtimeConfPath = flag.String("runtime", "./config/runtime.config.json", "runtime config file path")
+	defaultConfPath = flag.String("default", "./config/default.json", "default config file path")
+	localConfPath   = flag.String("local", "./config/local.json", "local config file path")
+	aliyunConfPath  = flag.String("aliyun", "./config/aliyun.json", "aliyun mse config file path")
 )
 
 // Init ...
@@ -24,14 +24,14 @@ func Init() {
 	flag.Parse()
 	aliyunViper := viper.New()
 	aliyunViper.AddConfigPath("./")
-	aliyunViper.SetConfigFile(aliyunConfPath)
+	aliyunViper.SetConfigFile(*aliyunConfPath)
 	if err := aliyunViper.ReadInConfig(); err != nil {
 		logrus.Errorln("read aliyun config error:", err)
 	}
 
 	defer func() {
 		viper.AddConfigPath("./")
-		viper.SetConfigFile(runtimeConfPath)
+		viper.SetConfigFile(*runtimeConfPath)
 		if err := viper.ReadInConfig(); err != nil {
 			logrus.Panicln("read runtime config error:", err)
 		}
@@ -43,7 +43,7 @@ func Init() {
 	}()
 
 	content, contentCh, _ := nconfig.Load(aliyunViper)
-	writeFile(runtimeConfPath, defaultConfPath, localConfPath, content)
+	writeFile(*runtimeConfPath, *defaultConfPath, *localConfPath, content)
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {
@@ -51,7 +51,7 @@ func Init() {
 			}
 		}()
 		for content := range contentCh {
-			writeFile(runtimeConfPath, defaultConfPath, localConfPath, content)
+			writeFile(*runtimeConfPath, *defaultConfPath, *localConfPath, content)
 		}
 	}()
 }

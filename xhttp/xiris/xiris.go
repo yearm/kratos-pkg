@@ -1,11 +1,12 @@
 package xiris
 
 import (
+	"net/http"
+	"sync"
+
 	"github.com/kataras/iris/v12"
 	iriscontext "github.com/kataras/iris/v12/context"
 	"github.com/yearm/kratos-pkg/ecode"
-	"net/http"
-	"sync"
 )
 
 var (
@@ -15,6 +16,8 @@ var (
 	}
 	// DefaultConfigures ...
 	DefaultConfigures = []iris.Configurator{iris.WithoutBodyConsumptionOnUnmarshal, iris.WithoutPathCorrectionRedirection, WithRemoteAddrHeaders}
+	// DefaultErrorCodes ...
+	DefaultErrorCodes = []int{http.StatusInternalServerError, http.StatusNotFound, http.StatusTooManyRequests}
 )
 
 // RegisterOnErrorCode ...
