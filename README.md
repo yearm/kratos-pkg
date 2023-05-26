@@ -18,10 +18,6 @@ kratos-pkg 整合 [kratos](https://github.com/go-kratos/kratos)、[iris](https:/
 - **xgrpc**：提供创建 grpc server client 以及默认 middlewares
 - **xhttp**：提供创建 http server 和 monitor server 以及默认 middlewares，自定义 iris Context
 
-## 使用
-- **http-template**：http://gitlab.sodalife.xyz/template/kratos-http-layout
-- **rpc-template**: http://gitlab.sodalife.xyz/template/kratos-rpc-layout
-
 ## 组件说明（部分说明）
 
 ### xhttp
