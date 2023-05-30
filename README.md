@@ -15,10 +15,15 @@ kratos-pkg 整合 [kratos](https://github.com/go-kratos/kratos)、[iris](https:/
 - **store**：存储层，支持 gorm、go-redis
 - **trace**：链路追踪，支持 trace、slstrace，默认使用 trace
 - **util**：内部工具包
+- **xerrors**: 错误处理模块，提供包装 error
 - **xgrpc**：提供创建 grpc server client 以及默认 middlewares
 - **xhttp**：提供创建 http server 和 monitor server 以及默认 middlewares，自定义 iris Context
 
 ## 组件说明（部分说明）
+
+### errors
+
+参考 [https://github.com/pkg/errors](https://github.com/pkg/errors) 开源库，提供对 error 进行包装，记录 caller 调用位置，最后由 status.Error() 获取其 error 完整的调用链（包装一次就会有一次调用链），再由 Log 中间件记录日志
 
 ### xhttp
 
@@ -200,7 +205,7 @@ func Validator() middleware.Middleware {
 							translateValue = strings.Replace(translateValue, fieldError.Field(), fieldError.StructField(), 1)
 							errMsg = fieldError.Field()
 						}
-						_fieldError := errors.New(fmt.Sprintf("%s:%s", fieldError.StructNamespace(), translateValue))
+						_fieldError := fmt.Errorf("%s:%s", fieldError.StructNamespace(), translateValue)
 						if errMsg != "" {
 							return nil, status.ErrorWithMsg(_fieldError, ecode.StatusInvalidRequest, errMsg)
 						}
@@ -226,11 +231,15 @@ func Error(err error, status ecode.Status, levels ...log.Level) error {
 		errMsg = err.Error()
 	}
 
+	callers := errors.Callers(err)
+	_callers := make([]interface{}, 0, len(callers)+1)
+	_callers = append(_callers, debug.Caller(2, 3))
+	_callers = append(_callers, gconv.Interfaces(callers)...)
 	_struct, _ := structpb.NewStruct(map[string]interface{}{
-		"status": status.String(),
-		"msg":    status.Message(),
-		"errorf": debug.Caller(2, 3),
-		"level":  level(levels...).String(),
+		"status":  status.String(),
+		"msg":     status.Message(),
+		"level":   level(levels...).String(),
+		"callers": _callers,
 	})
 	st, _ := gstatus.New(ecode.RPCBusinessError, fmt.Sprintf("[%s]%s", env.GetServiceName(), errMsg)).WithDetails(_struct)
 	return st.Err()
@@ -265,18 +274,18 @@ func fromError(err error, useErrMsg bool) *Result {
 	if !ok {
 		return nil
 	}
-	errorf := func() string { return debug.Caller(5, 3) }
+	caller := func() string { return debug.Caller(5, 3) }
 	switch st.Code() {
 	case codes.Canceled:
-		return NewWithErrorf(ecode.StatusCancelled, err, errorf, log.LevelWarn)
+		return NewWithCaller(ecode.StatusCancelled, err, caller, log.LevelWarn)
 	case codes.Unknown:
-		return NewWithErrorf(ecode.StatusUnknownError, err, errorf)
+		return NewWithCaller(ecode.StatusUnknownError, err, caller)
 	case codes.DeadlineExceeded:
-		return NewWithErrorf(ecode.StatusRequestTimeout, err, errorf)
+		return NewWithCaller(ecode.StatusRequestTimeout, err, caller)
 	case codes.Internal:
-		return NewWithErrorf(ecode.StatusInternalServerError, err, errorf)
+		return NewWithCaller(ecode.StatusInternalServerError, err, caller)
 	case codes.Unavailable:
-		return NewWithErrorf(ecode.StatusTemporarilyUnavailable, err, errorf)
+		return NewWithCaller(ecode.StatusTemporarilyUnavailable, err, caller)
 	case ecode.RPCBusinessError:
 		var (
 			_struct *structpb.Struct
@@ -289,15 +298,15 @@ func fromError(err error, useErrMsg bool) *Result {
 		}
 		if _struct != nil {
 			structMap := _struct.AsMap()
-			result := NewWithErrorf(ecode.Status(gconv.String(structMap["status"])), err, errorf, log.ParseLevel(gconv.String(structMap["level"])))
+			result := NewWithCaller(ecode.Status(gconv.String(structMap["status"])), err, caller, log.ParseLevel(gconv.String(structMap["level"])))
 			if useErrMsg {
 				result.SetMessage(gconv.String(structMap["msg"]))
 			}
 			return result
 		}
-		return NewWithErrorf(ecode.StatusInternalServerError, err, errorf)
+		return NewWithCaller(ecode.StatusInternalServerError, err, caller)
 	default:
-		return NewWithErrorf(ecode.StatusInternalServerError, err, errorf)
+		return NewWithCaller(ecode.StatusInternalServerError, err, caller)
 	}
 }
 ```

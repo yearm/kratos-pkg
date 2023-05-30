@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"github.com/go-kratos/aegis/circuitbreaker"
 	"github.com/go-kratos/aegis/circuitbreaker/sre"
@@ -63,7 +62,7 @@ func Validator() middleware.Middleware {
 							translateValue = strings.Replace(translateValue, fieldError.Field(), fieldError.StructField(), 1)
 							errMsg = fieldError.Field()
 						}
-						_fieldError := errors.New(fmt.Sprintf("%s:%s", fieldError.StructNamespace(), translateValue))
+						_fieldError := fmt.Errorf("%s:%s", fieldError.StructNamespace(), translateValue)
 						if errMsg != "" {
 							return nil, status.ErrorWithMsg(_fieldError, ecode.StatusInvalidRequest, errMsg)
 						}
@@ -92,7 +91,7 @@ func Recovery() middleware.Middleware {
 						"stack": fmt.Sprintf("%s", buf[:n]),
 					})
 					log.Context(ctx).Error(errInfo)
-					err = status.Error(errors.New(errStr), ecode.StatusInternalServerError)
+					err = status.Error(fmt.Errorf(errStr), ecode.StatusInternalServerError)
 				}
 			}()
 			return handler(ctx, req)

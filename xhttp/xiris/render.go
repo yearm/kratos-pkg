@@ -8,30 +8,32 @@ import (
 	"github.com/yearm/kratos-pkg/ecode"
 	"github.com/yearm/kratos-pkg/result"
 	"github.com/yearm/kratos-pkg/util/debug"
+	"github.com/yearm/kratos-pkg/xerrors"
+	"net/http"
 )
 
 // Render iris render
 func (c *Context) Render(status ecode.Status, data interface{}, httpCode ...int) {
-	r := result.NewWithErrorf(status, data, result.NilErrorf)
+	r := result.NewWithCaller(status, data, result.NilCaller)
 	c.json(r, httpCode...)
 }
 
 // RenderError ...
 func (c *Context) RenderError(status ecode.Status, data interface{}, httpCode ...int) {
-	r := result.NewWithErrorf(status, data, result.NilErrorf, log.LevelError)
+	r := result.NewWithCaller(status, data, result.NilCaller, log.LevelError)
 	c.json(r, httpCode...)
 }
 
 // RenderWithMsg ...
 func (c *Context) RenderWithMsg(status ecode.Status, data interface{}, msg string, httpCode ...int) {
-	r := result.NewWithErrorf(status, data, result.NilErrorf)
+	r := result.NewWithCaller(status, data, result.NilCaller)
 	r.SetMessage(msg)
 	c.json(r, httpCode...)
 }
 
 // RenderErrorWithMsg ...
 func (c *Context) RenderErrorWithMsg(status ecode.Status, data interface{}, msg string, httpCode ...int) {
-	r := result.NewWithErrorf(status, data, result.NilErrorf, log.LevelError)
+	r := result.NewWithCaller(status, data, result.NilCaller, log.LevelError)
 	r.SetMessage(msg)
 	c.json(r, httpCode...)
 }
@@ -55,7 +57,8 @@ func (c *Context) RenderText(httpCode int, text string, levels ...log.Level) {
 	if len(levels) > 0 {
 		level = levels[0]
 	}
-	r := &result.Result{Data: text, Level: level}
+	r := &result.Result{Data: text}
+	r.SetLevel(level)
 	c.text(r, httpCode)
 }
 
@@ -65,7 +68,8 @@ func (c *Context) RenderHTML(httpCode int, text string, levels ...log.Level) {
 	if len(levels) > 0 {
 		level = levels[0]
 	}
-	r := &result.Result{Data: text, Level: level}
+	r := &result.Result{Data: text}
+	r.SetLevel(level)
 	c.html(r, httpCode)
 }
 
@@ -111,13 +115,21 @@ func (c *Context) log(result *result.Result) {
 		"param":     c.ParamsString(),
 		"urlParams": urlParams,
 		"body":      string(body),
-		"form":      c.FormValues(),
+	}
+	if c.Method() == http.MethodPost && c.Request().PostForm != nil {
+		params["postForm"] = c.Request().PostForm
 	}
 	if cRouter := c.GetCurrentRoute(); cRouter != nil {
 		params["path"] = cRouter.Path()
 	}
 	for key, valuer := range logValuers() {
 		params[key] = valuer(c)
+	}
+
+	callers := make([]string, 0, 10)
+	callers = append(callers, debug.Caller(4, 3))
+	if result.Caller() != "" {
+		callers = append(callers, result.Caller())
 	}
 
 	_result := map[string]interface{}{
@@ -131,19 +143,19 @@ func (c *Context) log(result *result.Result) {
 	if err, ok := result.Data.(error); ok {
 		result.Data = nil
 		_result["error"] = err.Error()
+		callers = append(callers, xerrors.Callers(err)...)
 	}
 
 	level := log.LevelWarn
-	if result.Level.String() != "" {
-		level = result.Level
+	if result.Level().String() != "" {
+		level = result.Level()
 	}
 	log.Context(c).Log(level,
-		"@render", debug.Caller(4, 3),
-		"@errorf", result.Errorf,
 		"@field", map[string]interface{}{
 			"params":      params,
 			"processTime": c.ProcessTime(),
 			"result":      _result,
+			"callers":     callers,
 		},
 	)
 }

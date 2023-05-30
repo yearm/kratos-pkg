@@ -15,8 +15,8 @@ type Result struct {
 	Status ecode.Status `json:"status"`
 	Msg    string       `json:"message"`
 	Data   interface{}  `json:"data"`
-	Errorf string       `json:"-"`
-	Level  log.Level    `json:"-"`
+	caller string
+	level  log.Level
 }
 
 // SetMessage ...
@@ -27,12 +27,22 @@ func (r *Result) SetMessage(msg string) {
 	r.Msg = msg
 }
 
+// Caller ...
+func (r *Result) Caller() string {
+	return r.caller
+}
+
+// Level ...
+func (r *Result) Level() log.Level {
+	return r.level
+}
+
 // SetLevel ...
 func (r *Result) SetLevel(level log.Level) {
 	if r == nil {
 		return
 	}
-	r.Level = level
+	r.level = level
 }
 
 // New ...
@@ -41,8 +51,8 @@ func New(status ecode.Status, data interface{}, levels ...log.Level) *Result {
 		Status: status,
 		Msg:    status.Message(),
 		Data:   data,
-		Errorf: debug.Caller(2, 3),
-		Level:  level(levels...),
+		caller: debug.Caller(2, 3),
+		level:  level(levels...),
 	}
 }
 
@@ -52,19 +62,19 @@ func NewWithMsg(status ecode.Status, data interface{}, msg string, levels ...log
 		Status: status,
 		Msg:    msg,
 		Data:   data,
-		Errorf: debug.Caller(2, 3),
-		Level:  level(levels...),
+		caller: debug.Caller(2, 3),
+		level:  level(levels...),
 	}
 }
 
-// NewWithErrorf ...
-func NewWithErrorf(status ecode.Status, data interface{}, errorf func() string, levels ...log.Level) *Result {
+// NewWithCaller ...
+func NewWithCaller(status ecode.Status, data interface{}, caller func() string, levels ...log.Level) *Result {
 	return &Result{
 		Status: status,
 		Msg:    status.Message(),
 		Data:   data,
-		Errorf: errorf(),
-		Level:  level(levels...),
+		caller: caller(),
+		level:  level(levels...),
 	}
 }
 
@@ -104,18 +114,18 @@ func fromError(err error, useErrMsg bool) *Result {
 	if !ok {
 		return nil
 	}
-	errorf := func() string { return debug.Caller(5, 3) }
+	caller := func() string { return debug.Caller(5, 3) }
 	switch st.Code() {
 	case codes.Canceled:
-		return NewWithErrorf(ecode.StatusCancelled, err, errorf, log.LevelWarn)
+		return NewWithCaller(ecode.StatusCancelled, err, caller, log.LevelWarn)
 	case codes.Unknown:
-		return NewWithErrorf(ecode.StatusUnknownError, err, errorf)
+		return NewWithCaller(ecode.StatusUnknownError, err, caller)
 	case codes.DeadlineExceeded:
-		return NewWithErrorf(ecode.StatusRequestTimeout, err, errorf)
+		return NewWithCaller(ecode.StatusRequestTimeout, err, caller)
 	case codes.Internal:
-		return NewWithErrorf(ecode.StatusInternalServerError, err, errorf)
+		return NewWithCaller(ecode.StatusInternalServerError, err, caller)
 	case codes.Unavailable:
-		return NewWithErrorf(ecode.StatusTemporarilyUnavailable, err, errorf)
+		return NewWithCaller(ecode.StatusTemporarilyUnavailable, err, caller)
 	case ecode.RPCBusinessError:
 		var (
 			_struct *structpb.Struct
@@ -128,15 +138,15 @@ func fromError(err error, useErrMsg bool) *Result {
 		}
 		if _struct != nil {
 			structMap := _struct.AsMap()
-			result := NewWithErrorf(ecode.Status(gconv.String(structMap["status"])), err, errorf, log.ParseLevel(gconv.String(structMap["level"])))
+			result := NewWithCaller(ecode.Status(gconv.String(structMap["status"])), err, caller, log.ParseLevel(gconv.String(structMap["level"])))
 			if useErrMsg {
 				result.SetMessage(gconv.String(structMap["msg"]))
 			}
 			return result
 		}
-		return NewWithErrorf(ecode.StatusInternalServerError, err, errorf)
+		return NewWithCaller(ecode.StatusInternalServerError, err, caller)
 	default:
-		return NewWithErrorf(ecode.StatusInternalServerError, err, errorf)
+		return NewWithCaller(ecode.StatusInternalServerError, err, caller)
 	}
 }
 
@@ -149,5 +159,5 @@ func level(levels ...log.Level) log.Level {
 	return level
 }
 
-// NilErrorf ...
-var NilErrorf = func() string { return "" }
+// NilCaller ...
+var NilCaller = func() string { return "" }

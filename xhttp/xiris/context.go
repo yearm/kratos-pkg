@@ -3,7 +3,6 @@ package xiris
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"github.com/go-playground/locales/zh"
 	ut "github.com/go-playground/universal-translator"
@@ -93,9 +92,9 @@ func (c *Context) validateStruct(ptr interface{}) (customized bool, err error) {
 					errMsg = fieldError.Field()
 				}
 				if errMsg != "" {
-					return true, errors.New(errMsg)
+					return true, fmt.Errorf(errMsg)
 				}
-				return false, errors.New(fmt.Sprintf("%s:%s", fieldError.StructNamespace(), translateValue))
+				return false, fmt.Errorf("%s:%s", fieldError.StructNamespace(), translateValue)
 			}
 		}
 		return
