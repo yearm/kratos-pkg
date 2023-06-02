@@ -23,6 +23,7 @@ import (
 	"github.com/yearm/kratos-pkg/status"
 	"github.com/yearm/kratos-pkg/util/group"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/peer"
 	"reflect"
 	"runtime"
 	"strings"
@@ -139,6 +140,9 @@ func Log() middleware.Middleware {
 				params["header"] = headerStr
 				params["req"] = fmt.Sprint(req)
 				params["endpoint"] = info.Endpoint()
+			}
+			if p, ok := peer.FromContext(ctx); ok {
+				params["peerAddr"] = p.Addr.String()
 			}
 
 			defer func() {
