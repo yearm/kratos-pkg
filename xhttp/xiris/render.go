@@ -116,7 +116,7 @@ func (c *Context) log(result *result.Result) {
 		"urlParams": urlParams,
 		"body":      string(body),
 	}
-	if c.Method() == http.MethodPost && c.Request().PostForm != nil {
+	if c.Method() == http.MethodPost && len(c.Request().PostForm) > 0 {
 		params["postForm"] = c.Request().PostForm
 	}
 	if cRouter := c.GetCurrentRoute(); cRouter != nil {
