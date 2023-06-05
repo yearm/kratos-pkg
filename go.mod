@@ -39,8 +39,6 @@ require (
 	k8s.io/client-go v0.26.2
 )
 
-//replace github.com/iris-contrib/middleware/jwt => gitlab.sodalife.xyz/forks/iris-middleware-jwt.git v0.0.0-20210816094519-44f089148cee
-
 require (
 	github.com/BurntSushi/toml v1.2.1 // indirect
 	github.com/CloudyKit/fastprinter v0.0.0-20200109182630-33d98a066a53 // indirect
