@@ -69,7 +69,7 @@ func (a *Logger) Log(level klog.Level, keyValues ...interface{}) error {
 		keyValues = append(keyValues, "")
 	}
 
-	contents := make([]*sls.LogContent, 0)
+	contents := make([]*sls.LogContent, 0, len(keyValues)/2+1)
 	contents = append(contents, &sls.LogContent{
 		Key:   proto.String("@level"),
 		Value: proto.String(level.String()),
