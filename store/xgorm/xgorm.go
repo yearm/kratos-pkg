@@ -42,5 +42,30 @@ func NewDBClient(configPath string) *gorm.DB {
 	db.DB().SetMaxOpenConns(maxOpen)
 	db.DB().SetConnMaxLifetime(time.Duration(maxLifetime) * time.Second)
 	db.SingularTable(true)
+
+	db.Callback().Create().Replace("gorm:update_time_stamp", updateTimeStampForCreateCallback)
 	return db
+}
+
+// updateTimeStampForCreateCallback ...
+func updateTimeStampForCreateCallback(scope *gorm.Scope) {
+	if !scope.HasError() {
+		now := time.Now().Local()
+
+		if createdTimestampField, ok := scope.FieldByName("CreatedTimestamp"); ok {
+			if createdTimestampField.IsBlank {
+				_ = createdTimestampField.Set(now.Unix())
+			}
+		}
+		if createdAtField, ok := scope.FieldByName("CreatedAt"); ok {
+			if createdAtField.IsBlank {
+				_ = createdAtField.Set(now)
+			}
+		}
+		if updatedAtField, ok := scope.FieldByName("UpdatedAt"); ok {
+			if updatedAtField.IsBlank {
+				_ = updatedAtField.Set(now)
+			}
+		}
+	}
 }
