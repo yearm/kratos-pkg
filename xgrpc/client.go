@@ -8,63 +8,84 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"github.com/yearm/kratos-pkg/registry"
+	"golang.org/x/sync/singleflight"
 	"google.golang.org/grpc"
 	"sync"
 	"time"
 )
 
-var (
-	// connMap ...
-	connMap sync.Map
-	// connLock ...
-	connLock sync.Mutex
-)
-
 // GetRPCClientConn 配置结构规则 config/env/env.go:58
 func GetRPCClientConn(configPath string, opts ...kgrpc.ClientOption) *grpc.ClientConn {
-	var (
-		err  error
-		conn *grpc.ClientConn
-	)
-
-	connLock.Lock()
-	defer connLock.Unlock()
-	if v, ok := connMap.Load(configPath); ok {
-		return v.(*grpc.ClientConn)
-	}
-	defer func() {
-		if conn != nil {
-			connMap.Store(configPath, conn)
-		}
-	}()
-
 	endpoint := viper.GetString(fmt.Sprintf("%s.endpoint", configPath))
+	timeout := viper.GetInt(fmt.Sprintf("%s.timeout", configPath))
+	dialWithCredentials := viper.GetBool(fmt.Sprintf("%s.dialWithCredentials", configPath))
 	if endpoint == "" {
 		logrus.Panicln("endpoint is nil, config path:", configPath)
 	}
-	timeout := viper.GetInt(fmt.Sprintf("%s.timeout", configPath))
-	dialWithCredentials := viper.GetBool(fmt.Sprintf("%s.dialWithCredentials", configPath))
-
-	clientOpts := []kgrpc.ClientOption{kgrpc.WithEndpoint(endpoint)}
-	clientOpts = append(clientOpts, opts...)
-	if d := registry.NewDiscovery(); d != nil {
-		clientOpts = append(clientOpts, kgrpc.WithDiscovery(d))
-	}
-
-	if timeout >= 0 {
-		clientOpts = append(clientOpts, kgrpc.WithTimeout(time.Duration(timeout)*time.Second))
-	}
-
-	if dialWithCredentials {
-		clientOpts = append(clientOpts, kgrpc.WithTLSConfig(&tls.Config{}))
-		conn, err = kgrpc.Dial(context.Background(), clientOpts...)
-	} else {
-		conn, err = kgrpc.DialInsecure(context.Background(), clientOpts...)
-	}
-
+	conn, err := dial(endpoint, timeout, dialWithCredentials, opts...)
 	if err != nil {
-		logrus.Panicln("grpc dial error:", err)
+		logrus.Panicln(err)
 	}
 	logrus.Infoln("Connecting at", endpoint)
 	return conn
+}
+
+// GetClientConn ...
+func GetClientConn(endpoint string, timeout int, dialWithCredentials bool, opts ...kgrpc.ClientOption) (*grpc.ClientConn, error) {
+	if endpoint == "" {
+		return nil, fmt.Errorf("endpoint is nil")
+	}
+	conn, err := dial(endpoint, timeout, dialWithCredentials, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return conn, nil
+}
+
+var (
+	// connMap ...
+	connMap sync.Map
+	// group ...
+	group singleflight.Group
+)
+
+func dial(endpoint string, timeout int, dialWithCredentials bool, opts ...kgrpc.ClientOption) (*grpc.ClientConn, error) {
+	iConn, err, _ := group.Do(endpoint, func() (interface{}, error) {
+		var (
+			err  error
+			conn *grpc.ClientConn
+		)
+		if conn, ok := connMap.Load(endpoint); ok {
+			return conn, nil
+		}
+		defer func() {
+			if conn != nil {
+				connMap.Store(endpoint, conn)
+			}
+		}()
+
+		clientOpts := []kgrpc.ClientOption{kgrpc.WithEndpoint(endpoint)}
+		if timeout >= 0 {
+			clientOpts = append(clientOpts, kgrpc.WithTimeout(time.Duration(timeout)*time.Second))
+		}
+		if d := registry.NewDiscovery(); d != nil {
+			clientOpts = append(clientOpts, kgrpc.WithDiscovery(d))
+		}
+		clientOpts = append(clientOpts, opts...)
+
+		if dialWithCredentials {
+			clientOpts = append(clientOpts, kgrpc.WithTLSConfig(&tls.Config{}))
+			conn, err = kgrpc.Dial(context.Background(), clientOpts...)
+		} else {
+			conn, err = kgrpc.DialInsecure(context.Background(), clientOpts...)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("grpc dial error: %s", err)
+		}
+		return conn, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return iConn.(*grpc.ClientConn), nil
 }
