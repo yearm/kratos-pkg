@@ -12,11 +12,21 @@ import (
 
 // Result ...
 type Result struct {
-	Status ecode.Status `json:"status"`
-	Msg    string       `json:"message"`
-	Data   interface{}  `json:"data"`
-	caller string
-	level  log.Level
+	Status   ecode.Status `json:"status"`
+	Msg      string       `json:"message"`
+	Data     interface{}  `json:"data"`
+	httpCode int
+	caller   string
+	level    log.Level
+}
+
+func (r *Result) GetHttpCode() int {
+	return r.httpCode
+}
+
+func (r *Result) WithHttpCode(httpCode int) *Result {
+	r.httpCode = httpCode
+	return r
 }
 
 // SetMessage ...

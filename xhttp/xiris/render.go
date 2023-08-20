@@ -79,6 +79,8 @@ func (c *Context) json(result *result.Result, httpCode ...int) {
 	c.Header("X-Request-Id", tracing.TraceID()(c).(string))
 	if len(httpCode) > 0 {
 		c.StatusCode(httpCode[0])
+	} else if result.GetHttpCode() > 0 {
+		c.StatusCode(result.GetHttpCode())
 	}
 	c.log(result)
 	_, _ = c.JSON(result)
