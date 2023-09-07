@@ -7,6 +7,7 @@ const (
 	StatusUnknownError           Status = "UNKNOWN_ERROR"
 	StatusApiNotFount            Status = "API_NOT_FOUND"
 	StatusNotFound               Status = "NOT_FOUND"
+	StatusRecordNotFound         Status = "RECORD_NOT_FOUND"
 	StatusInvalidRequest         Status = "INVALID_REQUEST"
 	StatusRequestTimeout         Status = "REQUEST_TIMEOUT"
 	StatusTooManyRequests        Status = "TOO_MANY_REQUESTS"
@@ -30,6 +31,7 @@ var StatusMap = map[Status]string{
 	StatusUnknownError:           "未知错误",
 	StatusApiNotFount:            "请求的API不存在",
 	StatusNotFound:               "资源不存在",
+	StatusRecordNotFound:         "记录不存在",
 	StatusInvalidRequest:         "请求参数错误",
 	StatusRequestTimeout:         "请求超时",
 	StatusTooManyRequests:        "请求过于频繁",
