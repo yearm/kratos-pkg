@@ -112,6 +112,7 @@ func (c *Context) log(result *result.Result) {
 	body, _ := c.GetBody()
 	urlParams, _ := jsoniter.MarshalToString(c.URLParams())
 	params := map[string]interface{}{
+		"ip":        c.RemoteAddr(),
 		"method":    c.Method(),
 		"path":      c.Path(),
 		"param":     c.ParamsString(),
