@@ -26,6 +26,7 @@ require (
 	github.com/nacos-group/nacos-sdk-go v1.1.4
 	github.com/peterbourgon/mergemap v0.0.1
 	github.com/prometheus/client_golang v1.14.0
+	github.com/samber/lo v1.38.1
 	github.com/sirupsen/logrus v1.9.0
 	github.com/spf13/viper v1.15.0
 	go.opentelemetry.io/otel v1.14.0
@@ -132,6 +133,7 @@ require (
 	go.uber.org/multierr v1.8.0 // indirect
 	go.uber.org/zap v1.21.0 // indirect
 	golang.org/x/crypto v0.7.0 // indirect
+	golang.org/x/exp v0.0.0-20220303212507-bbda1eaf7a17 // indirect
 	golang.org/x/net v0.8.0 // indirect
 	golang.org/x/oauth2 v0.0.0-20221014153046-6fdb5e3db783 // indirect
 	golang.org/x/sys v0.6.0 // indirect

@@ -1,28 +1,12 @@
 package xgorm
 
 import (
-	"context"
 	"github.com/jinzhu/gorm"
 )
 
 type (
 	Scope func(db *gorm.DB) *gorm.DB
 	Map   map[string]interface{}
-
-	IGetter[T any] interface {
-		GetByScopes(ctx context.Context, scopes []Scope, tx ...*gorm.DB) (*T, error)
-		GetListByScopes(ctx context.Context, scopes []Scope, tx ...*gorm.DB) ([]*T, error)
-	}
-	ICreator[T any] interface {
-		Create(ctx context.Context, t *T, tx ...*gorm.DB) error
-	}
-	IUpdater[T any] interface {
-		SaveByScopes(ctx context.Context, t *T, scopes []Scope, tx ...*gorm.DB) error
-		UpdateByScopesAndMaps(ctx context.Context, scopes []Scope, maps []Map, tx ...*gorm.DB) error
-	}
-	ITx interface {
-		Transaction(fc func(tx *gorm.DB) error) error
-	}
 )
 
 // ToGormScopes ...
