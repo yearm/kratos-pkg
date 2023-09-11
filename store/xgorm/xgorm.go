@@ -60,7 +60,7 @@ func (b *BaseRepo[T]) GetCountByScopes(ctx context.Context, scopes []Scope, tx .
 func (b *BaseRepo[T]) GetListByScopes(ctx context.Context, scopes []Scope, tx ...*gorm.DB) ([]*T, error) {
 	var results = make([]*T, 0)
 	db := lo.If(len(tx) <= 0, b.rDB).ElseF(func() *gorm.DB { return tx[0] })
-	if err := db.Scopes(ToGormScopes(scopes)...).Find(results).Error; err != nil {
+	if err := db.Scopes(ToGormScopes(scopes)...).Find(&results).Error; err != nil {
 		return nil, err
 	}
 	return results, nil
