@@ -2,13 +2,14 @@ package config
 
 import (
 	"bytes"
+	"encoding/json"
 	"flag"
 	"github.com/fsnotify/fsnotify"
-	jsoniter "github.com/json-iterator/go"
-	"github.com/peterbourgon/mergemap"
+	"github.com/iancoleman/orderedmap"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	nconfig "github.com/yearm/kratos-pkg/config/nacos"
+	"github.com/yearm/kratos-pkg/util/mergeomap"
 	"os"
 )
 
@@ -59,36 +60,36 @@ func Init() {
 // writeFile ...
 func writeFile(runtimeConfPath, defaultConfPath, localConfPath, content string) {
 	var (
-		runtimeConfMap = make(map[string]interface{})
-		localConfMap   = make(map[string]interface{})
-		contentMap     = make(map[string]interface{})
+		runtimeConfMap = orderedmap.New()
+		localConfMap   = orderedmap.New()
+		contentMap     = orderedmap.New()
 	)
 
 	// NOTE: 优先级 local > nacos > default
 	defaultConf, err := os.ReadFile(defaultConfPath)
 	if err == nil {
-		if err = jsoniter.Unmarshal(defaultConf, &runtimeConfMap); err != nil {
+		if err = json.Unmarshal(defaultConf, &runtimeConfMap); err != nil {
 			logrus.Panicln("default config unmarshal error:", err)
 		}
 	}
 
 	if content != "" {
-		if err = jsoniter.Unmarshal([]byte(content), &contentMap); err != nil {
+		if err = json.Unmarshal([]byte(content), &contentMap); err != nil {
 			logrus.Panicln("content unmarshal error:", err)
 		}
-		runtimeConfMap = mergemap.Merge(runtimeConfMap, contentMap)
+		runtimeConfMap = mergeomap.Merge(runtimeConfMap, contentMap)
 	}
 
 	localConf, err := os.ReadFile(localConfPath)
 	if err == nil {
-		if err = jsoniter.Unmarshal(localConf, &localConfMap); err != nil {
+		if err = json.Unmarshal(localConf, &localConfMap); err != nil {
 			logrus.Panicln("local config unmarshal error:", err)
 		}
-		runtimeConfMap = mergemap.Merge(runtimeConfMap, localConfMap)
+		runtimeConfMap = mergeomap.Merge(runtimeConfMap, localConfMap)
 	}
 
 	runtimeConf := new(bytes.Buffer)
-	encoder := jsoniter.NewEncoder(runtimeConf)
+	encoder := json.NewEncoder(runtimeConf)
 	encoder.SetEscapeHTML(false)
 	encoder.SetIndent("", "  ")
 	if err = encoder.Encode(runtimeConfMap); err != nil {
