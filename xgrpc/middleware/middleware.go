@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/go-kratos/aegis/circuitbreaker"
 	"github.com/go-kratos/aegis/circuitbreaker/sre"
@@ -53,7 +54,8 @@ func Validator() middleware.Middleware {
 	return func(handler middleware.Handler) middleware.Handler {
 		return func(ctx context.Context, req interface{}) (reply interface{}, err error) {
 			if _err := validate.Struct(req); _err != nil {
-				if fieldErrors, ok := (_err).(validator.ValidationErrors); ok {
+				var fieldErrors validator.ValidationErrors
+				if errors.As(_err, &fieldErrors) {
 					for _, fieldError := range fieldErrors {
 						var errMsg string
 						translateValue := fieldError.Translate(trans)
@@ -164,7 +166,7 @@ func Log() middleware.Middleware {
 					processTime = time.Now().UnixMilli() - startAt
 				}
 				log.Context(ctx).Log(level,
-					"@field", map[string]interface{}{
+					"field", map[string]interface{}{
 						"params":      params,
 						"processTime": processTime,
 						"result":      result,

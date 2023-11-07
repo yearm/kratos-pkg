@@ -1,8 +1,8 @@
 package xiris
 
 import (
-	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"github.com/go-playground/locales/zh"
 	ut "github.com/go-playground/universal-translator"
@@ -12,6 +12,7 @@ import (
 	iriscontext "github.com/kataras/iris/v12/context"
 	"github.com/sirupsen/logrus"
 	"reflect"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -81,7 +82,8 @@ func (c *Context) ReadQueryValidate(ptr interface{}) (customized bool, err error
 // ValidateStruct ...
 func (c *Context) validateStruct(ptr interface{}) (customized bool, err error) {
 	if err = validate.Struct(ptr); err != nil {
-		if fieldErrors, ok := (err).(validator.ValidationErrors); ok {
+		var fieldErrors validator.ValidationErrors
+		if errors.As(err, &fieldErrors) {
 			for _, fieldError := range fieldErrors {
 				var errMsg string
 				translateValue := fieldError.Translate(trans)
@@ -122,19 +124,13 @@ func (c *Context) GetLimitAndOffset(isQueryAll bool, maxLimit ...int) (limit, of
 	return
 }
 
-// ParamsString ...
-func (c *Context) ParamsString() string {
-	var paramsBuff bytes.Buffer
+// PathParams ...
+func (c *Context) PathParams() map[string]string {
+	var pathParams = make(map[string]string)
 	c.Params().Visit(func(key string, value string) {
-		paramsBuff.WriteString(key)
-		paramsBuff.WriteString("=")
-		paramsBuff.WriteString(value)
-		paramsBuff.WriteString(",")
+		pathParams[key] = value
 	})
-	if paramsBuff.String() != "" {
-		return strings.TrimSuffix(paramsBuff.String(), ",")
-	}
-	return paramsBuff.String()
+	return pathParams
 }
 
 // ProcessTime ...
@@ -146,9 +142,16 @@ func (c *Context) ProcessTime() (processTime int64) {
 	return
 }
 
+// HandlerName ...
+func (c *Context) HandlerName() string {
+	return c.Values().GetString("handlerName")
+}
+
 // Handle ...
 func Handle(handleFunc func(ctx *Context)) iriscontext.Handler {
+	handlerName := runtime.FuncForPC(reflect.ValueOf(handleFunc).Pointer()).Name()
 	return func(c iriscontext.Context) {
+		c.Values().Set("handlerName", handlerName)
 		handleFunc(NewContext(c))
 	}
 }

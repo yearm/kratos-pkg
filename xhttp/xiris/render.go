@@ -5,6 +5,7 @@ import (
 	"github.com/go-kratos/kratos/v2/middleware/tracing"
 	"github.com/gogf/gf/v2/util/gconv"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/samber/lo"
 	"github.com/yearm/kratos-pkg/ecode"
 	"github.com/yearm/kratos-pkg/result"
 	"github.com/yearm/kratos-pkg/util/debug"
@@ -110,14 +111,16 @@ func (c *Context) log(result *result.Result) {
 		return
 	}
 	body, _ := c.GetBody()
-	urlParams, _ := jsoniter.MarshalToString(c.URLParams())
+	pathParam, _ := jsoniter.MarshalToString(c.PathParams())
+	queryParam, _ := jsoniter.MarshalToString(c.URLParams())
 	params := map[string]interface{}{
-		"ip":        c.RemoteAddr(),
-		"method":    c.Method(),
-		"path":      c.Path(),
-		"param":     c.ParamsString(),
-		"urlParams": urlParams,
-		"body":      string(body),
+		"clientIP":    c.RemoteAddr(),
+		"method":      c.Method(),
+		"path":        c.Path(),
+		"handlerName": c.HandlerName(),
+		"pathParam":   pathParam,
+		"queryParam":  queryParam,
+		"body":        string(body),
 	}
 	if c.Method() == http.MethodPost && len(c.Request().PostForm) > 0 {
 		params["postForm"] = c.Request().PostForm
@@ -129,12 +132,6 @@ func (c *Context) log(result *result.Result) {
 		params[key] = valuer(c)
 	}
 
-	callers := make([]string, 0, 10)
-	callers = append(callers, debug.Caller(4, 3))
-	if result.Caller() != "" {
-		callers = append(callers, result.Caller())
-	}
-
 	_result := map[string]interface{}{
 		"status":   result.Status,
 		"message":  result.Msg,
@@ -143,22 +140,23 @@ func (c *Context) log(result *result.Result) {
 	if _, ok := result.Data.(string); ok {
 		_result["data"] = result.Data
 	}
+
+	callers := make([]string, 0, 10)
+	callers = append(callers, debug.Caller(4, 3))
+	if result.Caller() != "" {
+		callers = append(callers, result.Caller())
+	}
 	if err, ok := result.Data.(error); ok {
 		result.Data = nil
 		_result["error"] = err.Error()
 		callers = append(callers, xerrors.Callers(err)...)
 	}
 
-	level := log.LevelWarn
-	if result.Level().String() != "" {
-		level = result.Level()
-	}
-	log.Context(c).Log(level,
-		"@field", map[string]interface{}{
-			"params":      params,
-			"processTime": c.ProcessTime(),
-			"result":      _result,
-			"callers":     callers,
-		},
-	)
+	level := lo.If(result.Level().String() != "", result.Level()).Else(log.LevelWarn)
+	log.Context(c).Log(level, "field", map[string]interface{}{
+		"params":      params,
+		"processTime": c.ProcessTime(),
+		"result":      _result,
+		"callers":     callers,
+	})
 }

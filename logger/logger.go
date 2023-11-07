@@ -34,14 +34,14 @@ func Init() (cleanup func()) {
 		source = ips[0]
 	}
 	logger = klog.With(logger,
-		"@system", env.GetServiceName(),
-		"@version", env.GetServiceVersion(),
-		"@source", source,
-		"@traceId", tracing.TraceID(),
-		"@caller", callerValue(),
-		"@spanId", tracing.SpanID(),
-		"@timestamp", timestampValue(),
-		"@date", klog.Timestamp("2006-01-02 15:04:05"),
+		"system", env.GetServiceName(),
+		"version", env.GetServiceVersion(),
+		"source", source,
+		"traceId", tracing.TraceID(),
+		"spanId", tracing.SpanID(),
+		"caller", callerValue(),
+		"timestamp", timestampValue(),
+		"date", klog.Timestamp("2006-01-02 15:04:05"),
 	)
 	klog.SetLogger(logger)
 	return
