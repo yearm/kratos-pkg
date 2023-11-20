@@ -1,5 +1,7 @@
 package ecode
 
+import "golang.org/x/exp/maps"
+
 // Status ...
 type Status string
 
@@ -10,5 +12,16 @@ func (s Status) String() string {
 
 // Message ...
 func (s Status) Message() string {
-	return StatusMap[s]
+	return statusMap[s]
+}
+
+var (
+	statusMap = map[Status]string{}
+)
+
+func init() {
+	maps.Copy(statusMap, commonStatus)
+	maps.Copy(statusMap, resourceStatus)
+	maps.Copy(statusMap, authStatus)
+	maps.Copy(statusMap, paymentStatus)
 }
