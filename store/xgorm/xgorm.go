@@ -173,6 +173,10 @@ func (b *BaseRepo[T]) ScopeOffset(v interface{}) Scope {
 	}
 }
 
+func (b *BaseRepo[T]) MapKV(k string, v interface{}) Map {
+	return Map{k: v}
+}
+
 // MapExprAdd ...
 func (b *BaseRepo[T]) MapExprAdd(k string, v interface{}) Map {
 	return Map{
