@@ -15,98 +15,112 @@ import (
 
 // Render iris render
 func (c *Context) Render(status ecode.Status, data interface{}, httpCode ...int) {
-	r := result.NewWithCaller(status, data, result.NilCaller)
-	c.json(r, httpCode...)
+	caller := debug.Caller(2, 3)
+	opts := []result.Option{result.Caller(caller)}
+	if len(httpCode) > 0 {
+		opts = append(opts, result.HttpCode(httpCode[0]))
+	}
+	res := result.New(status, data, opts...)
+	c.render(res)
 }
 
 // RenderError ...
 func (c *Context) RenderError(status ecode.Status, data interface{}, httpCode ...int) {
-	r := result.NewWithCaller(status, data, result.NilCaller, log.LevelError)
-	c.json(r, httpCode...)
+	caller := debug.Caller(2, 3)
+	opts := []result.Option{
+		result.Caller(caller),
+		result.Level(log.LevelError),
+	}
+	if len(httpCode) > 0 {
+		opts = append(opts, result.HttpCode(httpCode[0]))
+	}
+	res := result.New(status, data, opts...)
+	c.render(res)
 }
 
 // RenderWithMsg ...
 func (c *Context) RenderWithMsg(status ecode.Status, data interface{}, msg string, httpCode ...int) {
-	r := result.NewWithCaller(status, data, result.NilCaller)
-	r.SetMessage(msg)
-	c.json(r, httpCode...)
+	caller := debug.Caller(2, 3)
+	opts := []result.Option{
+		result.Caller(caller),
+		result.Message(msg),
+	}
+	if len(httpCode) > 0 {
+		opts = append(opts, result.HttpCode(httpCode[0]))
+	}
+	res := result.New(status, data, opts...)
+	c.render(res)
 }
 
 // RenderErrorWithMsg ...
 func (c *Context) RenderErrorWithMsg(status ecode.Status, data interface{}, msg string, httpCode ...int) {
-	r := result.NewWithCaller(status, data, result.NilCaller, log.LevelError)
-	r.SetMessage(msg)
-	c.json(r, httpCode...)
-}
-
-// RenderResult ...
-func (c *Context) RenderResult(r *result.Result, httpCode ...int) {
-	c.json(r, httpCode...)
-}
-
-// RenderResultWithLevel ...
-func (c *Context) RenderResultWithLevel(r *result.Result, level log.Level, httpCode ...int) {
-	if r != nil {
-		r.SetLevel(level)
+	caller := debug.Caller(2, 3)
+	opts := []result.Option{
+		result.Caller(caller),
+		result.Message(msg),
+		result.Level(log.LevelError),
 	}
-	c.json(r, httpCode...)
+	if len(httpCode) > 0 {
+		opts = append(opts, result.HttpCode(httpCode[0]))
+	}
+	res := result.New(status, data, opts...)
+	c.render(res)
 }
 
 // RenderText ...
 func (c *Context) RenderText(httpCode int, text string, levels ...log.Level) {
-	level := log.LevelWarn
-	if len(levels) > 0 {
-		level = levels[0]
+	caller := debug.Caller(2, 3)
+	opts := []result.Option{
+		result.Caller(caller),
+		result.HttpCode(httpCode),
+		result.RenderType(result.TEXT),
 	}
-	r := &result.Result{Data: text}
-	r.SetLevel(level)
-	c.text(r, httpCode)
+	if len(levels) > 0 {
+		opts = append(opts, result.Level(levels[0]))
+	}
+	res := result.New(ecode.StatusOk, text, opts...)
+	c.render(res)
 }
 
 // RenderHTML ...
 func (c *Context) RenderHTML(httpCode int, text string, levels ...log.Level) {
-	level := log.LevelWarn
+	caller := debug.Caller(2, 3)
+	opts := []result.Option{
+		result.Caller(caller),
+		result.HttpCode(httpCode),
+		result.RenderType(result.HTML),
+	}
 	if len(levels) > 0 {
-		level = levels[0]
+		opts = append(opts, result.Level(levels[0]))
 	}
-	r := &result.Result{Data: text}
-	r.SetLevel(level)
-	c.html(r, httpCode)
+	res := result.New(ecode.StatusOk, text, opts...)
+	c.render(res)
 }
 
-// json ...
-func (c *Context) json(result *result.Result, httpCode ...int) {
+// RenderResult ...
+func (c *Context) RenderResult(res *result.Result) {
+	c.render(res, debug.Caller(2, 3))
+}
+
+func (c *Context) render(res *result.Result, beforeCaller ...string) {
 	c.Header("Cache-Control", "no-cache")
 	c.Header("X-Request-Id", tracing.TraceID()(c).(string))
-	if len(httpCode) > 0 {
-		c.StatusCode(httpCode[0])
-	} else if result.GetHttpCode() > 0 {
-		c.StatusCode(result.GetHttpCode())
+	if res.HttpCode() > 0 {
+		c.StatusCode(res.HttpCode())
 	}
-	c.log(result)
-	_, _ = c.JSON(result)
-}
-
-// text ...
-func (c *Context) text(result *result.Result, httpCode int) {
-	c.Header("Cache-Control", "no-cache")
-	c.Header("X-Request-Id", tracing.TraceID()(c).(string))
-	c.StatusCode(httpCode)
-	c.log(result)
-	_, _ = c.Text(gconv.String(result.Data))
-}
-
-// html ...
-func (c *Context) html(result *result.Result, httpCode int) {
-	c.Header("Cache-Control", "no-cache")
-	c.Header("X-Request-Id", tracing.TraceID()(c).(string))
-	c.StatusCode(httpCode)
-	c.log(result)
-	_, _ = c.HTML(gconv.String(result.Data))
+	c.log(res, beforeCaller...)
+	switch res.RenderType() {
+	case result.JSON:
+		_, _ = c.JSON(res)
+	case result.HTML:
+		_, _ = c.HTML(gconv.String(res.Data))
+	case result.TEXT:
+		_, _ = c.Text(gconv.String(res.Data))
+	}
 }
 
 // log ...
-func (c *Context) log(result *result.Result) {
+func (c *Context) log(result *result.Result, beforeCaller ...string) {
 	if result == nil {
 		return
 	}
@@ -142,7 +156,9 @@ func (c *Context) log(result *result.Result) {
 	}
 
 	callers := make([]string, 0, 10)
-	callers = append(callers, debug.Caller(4, 3))
+	if len(beforeCaller) > 0 {
+		callers = append(callers, beforeCaller[0])
+	}
 	if result.Caller() != "" {
 		callers = append(callers, result.Caller())
 	}

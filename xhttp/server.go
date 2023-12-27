@@ -13,36 +13,6 @@ import (
 	"time"
 )
 
-// NewIrisHTTPServer ...
-// Deprecated: Use NewHTTPServer
-func NewIrisHTTPServer(app *iris.Application, configPath ...string) (*thttp.Server, error) {
-	opts := make([]thttp.ServerOption, 0)
-	var (
-		httpHost              string
-		httpPort, httpTimeout int
-	)
-	if len(configPath) > 0 {
-		_configPath := configPath[0]
-		httpHost = viper.GetString(fmt.Sprintf("%s.host", _configPath))
-		httpPort = viper.GetInt(fmt.Sprintf("%s.port", _configPath))
-		httpTimeout = viper.GetInt(fmt.Sprintf("%s.timeout", _configPath))
-	} else {
-		httpHost = env.GetHttpHost()
-		httpPort = env.GetHttpPort()
-		httpTimeout = env.GetHttpTimeout()
-	}
-	if httpHost != "" && httpPort > 0 {
-		opts = append(opts, thttp.Address(fmt.Sprintf("%s:%d", httpHost, httpPort)))
-	}
-	if httpTimeout >= 0 {
-		// NOTE: context 的超时时间
-		opts = append(opts, thttp.Timeout(time.Duration(httpTimeout)*time.Second))
-	}
-	httpSrv := thttp.NewServer(opts...)
-	httpSrv.HandlePrefix("/", app)
-	return httpSrv, app.Build()
-}
-
 // NewHTTPServer ...
 func NewHTTPServer(handler http.Handler, configPath ...string) (*thttp.Server, error) {
 	opts := make([]thttp.ServerOption, 0)

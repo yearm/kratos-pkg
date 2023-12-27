@@ -266,47 +266,61 @@ func FromError(err error) (*gstatus.Status, *structpb.Struct) {
 #### 解析 rpc 层抛出的错误
 Result 为 http 响应结构定义，fromError 作用是将 rpc error 解析转换成 Result
 ```go
-func fromError(err error, useErrMsg bool) *Result {
-	if err == nil {
-		return nil
-	}
-	st, ok := status.FromError(err)
+func FromRPCError(err error, opts ...Option) *Result {
+	status, ok := gstatus.FromError(err)
 	if !ok {
 		return nil
 	}
-	caller := func() string { return debug.Caller(5, 3) }
-	switch st.Code() {
-	case codes.Canceled:
-		return NewWithCaller(ecode.StatusCancelled, err, caller, log.LevelWarn)
-	case codes.Unknown:
-		return NewWithCaller(ecode.StatusUnknownError, err, caller)
-	case codes.DeadlineExceeded:
-		return NewWithCaller(ecode.StatusRequestTimeout, err, caller)
-	case codes.Internal:
-		return NewWithCaller(ecode.StatusInternalServerError, err, caller)
-	case codes.Unavailable:
-		return NewWithCaller(ecode.StatusTemporarilyUnavailable, err, caller)
+
+	var (
+		code   ecode.Status
+		result *Result
+		level  = log.LevelError
+	)
+	defer func() {
+		for _, opt := range opts {
+			opt(result)
+		}
+	}()
+	switch status.Code() {
 	case ecode.RPCBusinessError:
-		var (
-			_struct *structpb.Struct
-			_ok     bool
-		)
-		for _, detail := range st.Details() {
-			if _struct, _ok = detail.(*structpb.Struct); _ok {
-				break
+		for _, detail := range status.Details() {
+			if st, ok := detail.(*structpb.Struct); ok {
+				structMap := st.AsMap()
+				result = &Result{
+					Status:    ecode.Status(gconv.String(structMap["status"])),
+					Msg:       gconv.String(structMap["msg"]),
+					Data:      err,
+					renderTyp: JSON,
+					caller:    debug.Caller(2, 3),
+					level:     log.ParseLevel(gconv.String(structMap["level"])),
+				}
+				return result
 			}
 		}
-		if _struct != nil {
-			structMap := _struct.AsMap()
-			result := NewWithCaller(ecode.Status(gconv.String(structMap["status"])), err, caller, log.ParseLevel(gconv.String(structMap["level"])))
-			if useErrMsg {
-				result.SetMessage(gconv.String(structMap["msg"]))
-			}
-			return result
-		}
-		return NewWithCaller(ecode.StatusInternalServerError, err, caller)
+		code = ecode.StatusInternalServerError
+	case codes.Canceled:
+		code = ecode.StatusCancelled
+		level = log.LevelWarn
+	case codes.Unknown:
+		code = ecode.StatusUnknownError
+	case codes.DeadlineExceeded:
+		code = ecode.StatusRequestTimeout
+	case codes.Internal:
+		code = ecode.StatusInternalServerError
+	case codes.Unavailable:
+		code = ecode.StatusTemporarilyUnavailable
 	default:
-		return NewWithCaller(ecode.StatusInternalServerError, err, caller)
+		code = ecode.StatusInternalServerError
 	}
+	result = &Result{
+		Status:    code,
+		Msg:       code.Message(),
+		Data:      err,
+		renderTyp: JSON,
+		caller:    debug.Caller(2, 3),
+		level:     level,
+	}
+	return result
 }
 ```

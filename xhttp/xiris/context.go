@@ -11,6 +11,7 @@ import (
 	"github.com/kataras/iris/v12"
 	iriscontext "github.com/kataras/iris/v12/context"
 	"github.com/sirupsen/logrus"
+	"github.com/yearm/kratos-pkg/errs"
 	"reflect"
 	"runtime"
 	"strings"
@@ -53,35 +54,25 @@ func NewContext(ctx iris.Context) *Context {
 	return &Context{Context: ctx, stdContext: stdContext{ctx.Request().Context()}}
 }
 
-// ReadJSONValid ...
-// Deprecated: Use ReadJSONValidate
-func (c *Context) ReadJSONValid(outPtr interface{}) error {
+// ReadJSONValidate ...
+func (c *Context) ReadJSONValidate(outPtr interface{}) error {
 	if err := c.ReadJSON(outPtr); err != nil {
 		return err
-	}
-	_, err := c.validateStruct(outPtr)
-	return err
-}
-
-// ReadJSONValidate true: error is errMsg tag message
-func (c *Context) ReadJSONValidate(outPtr interface{}) (customized bool, err error) {
-	if err = c.ReadJSON(outPtr); err != nil {
-		return
 	}
 	return c.validateStruct(outPtr)
 }
 
-// ReadQueryValidate true: error is errMsg tag message
-func (c *Context) ReadQueryValidate(ptr interface{}) (customized bool, err error) {
-	if err = c.ReadQuery(ptr); err != nil {
-		return
+// ReadQueryValidate ...
+func (c *Context) ReadQueryValidate(ptr interface{}) error {
+	if err := c.ReadQuery(ptr); err != nil {
+		return err
 	}
 	return c.validateStruct(ptr)
 }
 
 // ValidateStruct ...
-func (c *Context) validateStruct(ptr interface{}) (customized bool, err error) {
-	if err = validate.Struct(ptr); err != nil {
+func (c *Context) validateStruct(ptr interface{}) error {
+	if err := validate.Struct(ptr); err != nil {
 		var fieldErrors validator.ValidationErrors
 		if errors.As(err, &fieldErrors) {
 			for _, fieldError := range fieldErrors {
@@ -94,14 +85,14 @@ func (c *Context) validateStruct(ptr interface{}) (customized bool, err error) {
 					errMsg = fieldError.Field()
 				}
 				if errMsg != "" {
-					return true, fmt.Errorf(errMsg)
+					return errs.NewValidateError(errMsg)
 				}
-				return false, fmt.Errorf("%s:%s", fieldError.StructNamespace(), translateValue)
+				return fmt.Errorf("%s:%s", fieldError.StructNamespace(), translateValue)
 			}
 		}
-		return
+		return err
 	}
-	return
+	return nil
 }
 
 // GetLimitAndOffset ...

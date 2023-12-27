@@ -4,37 +4,84 @@ import (
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/gogf/gf/v2/util/gconv"
 	"github.com/yearm/kratos-pkg/ecode"
+	"github.com/yearm/kratos-pkg/errs"
 	"github.com/yearm/kratos-pkg/util/debug"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	gstatus "google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
-// Result ...
-type Result struct {
-	Status   ecode.Status `json:"status"`
-	Msg      string       `json:"message"`
-	Data     interface{}  `json:"data"`
-	httpCode int
-	caller   string
-	level    log.Level
+type RenderTyp string
+
+const (
+	JSON RenderTyp = "JSON"
+	HTML RenderTyp = "HTML"
+	TEXT RenderTyp = "TEXT"
+)
+
+type (
+	Option func(r *Result)
+	Result struct {
+		Status    ecode.Status `json:"status"`
+		Msg       string       `json:"message"`
+		Data      interface{}  `json:"data"`
+		renderTyp RenderTyp
+		httpCode  int
+		caller    string
+		level     log.Level
+	}
+)
+
+// Message msg
+func Message(msg string) Option {
+	return func(r *Result) {
+		r.Msg = msg
+	}
 }
 
-func (r *Result) GetHttpCode() int {
+// HttpCode http code
+func HttpCode(code int) Option {
+	return func(r *Result) {
+		r.httpCode = code
+	}
+}
+
+// Caller caller
+func Caller(caller string) Option {
+	return func(r *Result) {
+		r.caller = caller
+	}
+}
+
+// Level log level
+func Level(level log.Level) Option {
+	return func(r *Result) {
+		r.level = level
+	}
+}
+
+// UseStatusMsg use status msg
+func UseStatusMsg() Option {
+	return func(r *Result) {
+		r.Msg = r.Status.Message()
+	}
+}
+
+// RenderType render type
+func RenderType(renderTyp RenderTyp) Option {
+	return func(r *Result) {
+		r.renderTyp = renderTyp
+	}
+}
+
+// HttpCode ...
+func (r *Result) HttpCode() int {
 	return r.httpCode
 }
 
-func (r *Result) WithHttpCode(httpCode int) *Result {
-	r.httpCode = httpCode
-	return r
-}
-
-// SetMessage ...
-func (r *Result) SetMessage(msg string) {
-	if r == nil {
-		return
-	}
-	r.Msg = msg
+// RenderType ...
+func (r *Result) RenderType() RenderTyp {
+	return r.renderTyp
 }
 
 // Caller ...
@@ -47,127 +94,90 @@ func (r *Result) Level() log.Level {
 	return r.level
 }
 
-// SetLevel ...
-func (r *Result) SetLevel(level log.Level) {
-	if r == nil {
-		return
-	}
-	r.level = level
-}
-
 // New ...
-func New(status ecode.Status, data interface{}, levels ...log.Level) *Result {
-	return &Result{
-		Status: status,
-		Msg:    status.Message(),
-		Data:   data,
-		caller: debug.Caller(2, 3),
-		level:  level(levels...),
+func New(status ecode.Status, data interface{}, opts ...Option) *Result {
+	result := &Result{
+		Status:    status,
+		Msg:       status.Message(),
+		Data:      data,
+		renderTyp: JSON,
+		level:     log.LevelWarn,
 	}
-}
-
-// NewWithMsg use custom msg
-func NewWithMsg(status ecode.Status, data interface{}, msg string, levels ...log.Level) *Result {
-	return &Result{
-		Status: status,
-		Msg:    msg,
-		Data:   data,
-		caller: debug.Caller(2, 3),
-		level:  level(levels...),
+	if e, ok := data.(*errs.ValidateError); ok {
+		result.Msg = e.Error()
 	}
-}
-
-// NewWithCaller ...
-func NewWithCaller(status ecode.Status, data interface{}, caller func() string, levels ...log.Level) *Result {
-	return &Result{
-		Status: status,
-		Msg:    status.Message(),
-		Data:   data,
-		caller: caller(),
-		level:  level(levels...),
+	for _, opt := range opts {
+		opt(result)
 	}
-}
-
-// NewFromRPCError ...
-func NewFromRPCError(err error) *Result {
-	return fromError(err, false)
-}
-
-// NewWithMsgFromRPCError ...
-func NewWithMsgFromRPCError(err error) *Result {
-	return fromError(err, true)
-}
-
-// ErrorIs ...
-// Deprecated: Use StatusIs
-func ErrorIs(r *Result, status ecode.Status) bool {
-	if r == nil {
-		return false
+	if result.caller == "" {
+		result.caller = debug.Caller(2, 3)
 	}
-	return r.Status == status
+	return result
 }
 
-// StatusIs ...
-func StatusIs(r *Result, status ecode.Status) bool {
-	if r == nil {
-		return false
-	}
-	return r.Status == status
-}
-
-// fromError ...
-func fromError(err error, useErrMsg bool) *Result {
-	if err == nil {
-		return nil
-	}
-	st, ok := status.FromError(err)
+// FromRPCError ...
+func FromRPCError(err error, opts ...Option) *Result {
+	status, ok := gstatus.FromError(err)
 	if !ok {
 		return nil
 	}
-	caller := func() string { return debug.Caller(5, 3) }
-	switch st.Code() {
-	case codes.Canceled:
-		return NewWithCaller(ecode.StatusCancelled, err, caller, log.LevelWarn)
-	case codes.Unknown:
-		return NewWithCaller(ecode.StatusUnknownError, err, caller)
-	case codes.DeadlineExceeded:
-		return NewWithCaller(ecode.StatusRequestTimeout, err, caller)
-	case codes.Internal:
-		return NewWithCaller(ecode.StatusInternalServerError, err, caller)
-	case codes.Unavailable:
-		return NewWithCaller(ecode.StatusTemporarilyUnavailable, err, caller)
+
+	var (
+		code   ecode.Status
+		result *Result
+		level  = log.LevelError
+	)
+	defer func() {
+		for _, opt := range opts {
+			opt(result)
+		}
+	}()
+	switch status.Code() {
 	case ecode.RPCBusinessError:
-		var (
-			_struct *structpb.Struct
-			_ok     bool
-		)
-		for _, detail := range st.Details() {
-			if _struct, _ok = detail.(*structpb.Struct); _ok {
-				break
+		for _, detail := range status.Details() {
+			if st, ok := detail.(*structpb.Struct); ok {
+				structMap := st.AsMap()
+				result = &Result{
+					Status:    ecode.Status(gconv.String(structMap["status"])),
+					Msg:       gconv.String(structMap["msg"]),
+					Data:      err,
+					renderTyp: JSON,
+					caller:    debug.Caller(2, 3),
+					level:     log.ParseLevel(gconv.String(structMap["level"])),
+				}
+				return result
 			}
 		}
-		if _struct != nil {
-			structMap := _struct.AsMap()
-			result := NewWithCaller(ecode.Status(gconv.String(structMap["status"])), err, caller, log.ParseLevel(gconv.String(structMap["level"])))
-			if useErrMsg {
-				result.SetMessage(gconv.String(structMap["msg"]))
-			}
-			return result
-		}
-		return NewWithCaller(ecode.StatusInternalServerError, err, caller)
+		code = ecode.StatusInternalServerError
+	case codes.Canceled:
+		code = ecode.StatusCancelled
+		level = log.LevelWarn
+	case codes.Unknown:
+		code = ecode.StatusUnknownError
+	case codes.DeadlineExceeded:
+		code = ecode.StatusRequestTimeout
+	case codes.Internal:
+		code = ecode.StatusInternalServerError
+	case codes.Unavailable:
+		code = ecode.StatusTemporarilyUnavailable
 	default:
-		return NewWithCaller(ecode.StatusInternalServerError, err, caller)
+		code = ecode.StatusInternalServerError
 	}
+	result = &Result{
+		Status:    code,
+		Msg:       code.Message(),
+		Data:      err,
+		renderTyp: JSON,
+		caller:    debug.Caller(2, 3),
+		level:     level,
+	}
+	return result
 }
 
-// level ...
-func level(levels ...log.Level) log.Level {
-	level := log.LevelWarn
-	if len(levels) > 0 {
-		level = levels[0]
+// StatusIs ...
+func StatusIs(result *Result, status ecode.Status) bool {
+	if result == nil {
+		return false
 	}
-	return level
+	return result.Status == status
 }
-
-// NilCaller ...
-var NilCaller = func() string { return "" }
