@@ -94,6 +94,14 @@ func (r *Result) Level() log.Level {
 	return r.level
 }
 
+// StatusIs ...
+func (r *Result) StatusIs(status ecode.Status) bool {
+	if r == nil {
+		return false
+	}
+	return r.Status == status
+}
+
 // New ...
 func New(status ecode.Status, data interface{}, opts ...Option) *Result {
 	result := &Result{

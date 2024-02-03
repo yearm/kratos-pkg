@@ -26,7 +26,7 @@ import (
 )
 
 // DefaultMiddlewares ...
-var DefaultMiddlewares = []middleware.Middleware{StartAt(), tracing.Server(), Metrics(env.GetServiceName()), Recovery(), Cors(), RateLimit()}
+var DefaultMiddlewares = []middleware.Middleware{StartAt(), tracing.Server(), Metrics(), Recovery(), Cors(), RateLimit()}
 
 // Middlewares return middlewares wrapper
 func Middlewares(m ...middleware.Middleware) iriscontext.Handler {
@@ -135,7 +135,7 @@ var (
 )
 
 // Metrics ...
-func Metrics(svcName string) middleware.Middleware {
+func Metrics() middleware.Middleware {
 	promOnce.Do(func() {
 		labelNames := []string{"app", "method", "path", "code"}
 		prom = metrics.NewProm("").
@@ -147,7 +147,7 @@ func Metrics(svcName string) middleware.Middleware {
 		return func(ctx context.Context, req interface{}) (interface{}, error) {
 			defer func() {
 				if irisCtx, ok := FromIrisContext(ctx); ok {
-					labels := []string{svcName, irisCtx.Method(), irisCtx.GetCurrentRoute().Path(), strconv.Itoa(irisCtx.GetStatusCode())}
+					labels := []string{env.GetServiceName(), irisCtx.Method(), irisCtx.GetCurrentRoute().Path(), strconv.Itoa(irisCtx.GetStatusCode())}
 					prom.CounterIncr(labels...)
 					processTime := NewContext(irisCtx).ProcessTime()
 					prom.HistogramObserve(float64(processTime)/1e3, labels...)
