@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/hoisie/mustache"
 	"github.com/jinzhu/gorm"
+	"github.com/samber/lo"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"github.com/yearm/kratos-pkg/config/env"
@@ -21,13 +22,15 @@ func NewDBClient(configPath string) *gorm.DB {
 	maxIdle := viper.GetInt(fmt.Sprintf("%s.maxIdle", configPath))
 	maxOpen := viper.GetInt(fmt.Sprintf("%s.maxOpen", configPath))
 	maxLifetime := viper.GetInt(fmt.Sprintf("%s.maxLifetime", configPath))
+	charset := viper.GetString(fmt.Sprintf("%s.charset", configPath))
 
-	url := mustache.Render("{{user}}:{{password}}@tcp({{host}}:{{port}})/{{database}}?charset=utf8&parseTime=True&loc=Local", map[string]interface{}{
+	url := mustache.Render("{{user}}:{{password}}@tcp({{host}}:{{port}})/{{database}}?charset={{charset}}&parseTime=True&loc=Local", map[string]interface{}{
 		"user":     user,
 		"password": password,
 		"host":     host,
 		"port":     port,
 		"database": database,
+		"charset":  lo.If(charset == "", "utf8").Else(charset),
 	})
 	db, err := gorm.Open(dialect, url)
 	if err != nil {
