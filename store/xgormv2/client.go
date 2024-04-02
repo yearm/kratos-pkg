@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/samber/lo"
+	"github.com/yearm/kratos-pkg/config/env"
 	semconv "go.opentelemetry.io/otel/semconv/v1.14.0"
 	"gorm.io/gorm/logger"
 	"gorm.io/plugin/opentelemetry/tracing"
-	"sodalife.xyz/go-libs/kratos-pkg/config/env"
 	"time"
 
 	"github.com/hoisie/mustache"

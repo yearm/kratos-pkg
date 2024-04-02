@@ -18,6 +18,7 @@ import (
 	ut "github.com/go-playground/universal-translator"
 	"github.com/go-playground/validator/v10"
 	zhtrans "github.com/go-playground/validator/v10/translations/zh"
+	"github.com/gogf/gf/v2/util/gconv"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/sirupsen/logrus"
 	"github.com/yearm/kratos-pkg/ecode"
@@ -136,28 +137,42 @@ func Log() middleware.Middleware {
 				params = make(map[string]interface{})
 				result = make(map[string]interface{})
 			)
-			if info, ok := transport.FromServerContext(ctx); ok {
-				params["method"] = info.Operation()
-				headerStr, _ := jsoniter.MarshalToString(info.RequestHeader())
+			tr, ok := transport.FromServerContext(ctx)
+			if ok {
+				params["method"] = tr.Operation()
+				headerStr, _ := jsoniter.MarshalToString(tr.RequestHeader())
 				params["header"] = headerStr
 				params["req"] = fmt.Sprint(req)
-				params["endpoint"] = info.Endpoint()
+				params["endpoint"] = tr.Endpoint()
 			}
 			if p, ok := peer.FromContext(ctx); ok {
 				params["peerAddr"] = p.Addr.String()
 			}
 
 			defer func() {
-				var level = log.LevelWarn
-				st, _struct := status.FromError(err)
+				var (
+					errMsg     string
+					level      = log.LevelInfo
+					st, detail = status.FromError(err)
+				)
 				result["grpcCode"] = codes.OK
 				if st != nil {
 					result["grpcCode"] = st.Code()
 					result["error"] = st.Err().Error()
-					if _struct != nil {
-						for k, v := range _struct.AsMap() {
+					level = log.LevelError
+					if detail != nil {
+						detailMap := detail.AsMap()
+						for k, v := range detailMap {
+							if k == status.DetailLevelKey {
+								level = log.ParseLevel(gconv.String(v))
+							}
 							result[k] = v
 						}
+						messages := make([]string, 0, 5)
+						messages = append(messages, fmt.Sprintf("- **method**: %s", tr.Operation()))
+						messages = append(messages, fmt.Sprintf("- **status**: %s[%s]", detailMap[status.DetailStatusKey], detailMap[status.DetailMessageKey]))
+						messages = append(messages, fmt.Sprintf("- **error**: %s", st.Err()))
+						errMsg = fmt.Sprintf(strings.Join(messages, "\n"))
 					}
 				}
 
@@ -166,6 +181,7 @@ func Log() middleware.Middleware {
 					processTime = time.Now().UnixMilli() - startAt
 				}
 				log.Context(ctx).Log(level,
+					log.DefaultMessageKey, errMsg,
 					"field", map[string]interface{}{
 						"params":      params,
 						"processTime": processTime,

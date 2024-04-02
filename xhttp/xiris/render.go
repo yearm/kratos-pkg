@@ -1,6 +1,7 @@
 package xiris
 
 import (
+	"fmt"
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/go-kratos/kratos/v2/middleware/tracing"
 	"github.com/gogf/gf/v2/util/gconv"
@@ -11,6 +12,7 @@ import (
 	"github.com/yearm/kratos-pkg/util/debug"
 	"github.com/yearm/kratos-pkg/xerrors"
 	"net/http"
+	"strings"
 )
 
 // Render iris render
@@ -119,6 +121,13 @@ func (c *Context) render(res *result.Result, beforeCaller ...string) {
 	}
 }
 
+func (c *Context) logHandleName() string {
+	handlerName := c.HandlerName()
+	index := strings.Index(handlerName, "/")
+	handlerName = handlerName[index+1:]
+	return strings.NewReplacer("-fm", "", ")", "", "(*", "", ".", "/").Replace(handlerName)
+}
+
 // log ...
 func (c *Context) log(result *result.Result, beforeCaller ...string) {
 	if result == nil {
@@ -127,11 +136,12 @@ func (c *Context) log(result *result.Result, beforeCaller ...string) {
 	body, _ := c.GetBody()
 	pathParam, _ := jsoniter.MarshalToString(c.PathParams())
 	queryParam, _ := jsoniter.MarshalToString(c.URLParams())
+	handlerName := c.logHandleName()
 	params := map[string]interface{}{
 		"clientIP":    c.RemoteAddr(),
 		"method":      c.Method(),
 		"path":        c.Path(),
-		"handlerName": c.HandlerName(),
+		"handlerName": handlerName,
 		"pathParam":   pathParam,
 		"queryParam":  queryParam,
 		"body":        string(body),
@@ -146,13 +156,13 @@ func (c *Context) log(result *result.Result, beforeCaller ...string) {
 		params[key] = valuer(c)
 	}
 
-	_result := map[string]interface{}{
+	resultMap := map[string]interface{}{
 		"status":   result.Status,
 		"message":  result.Msg,
 		"httpCode": c.GetStatusCode(),
 	}
 	if _, ok := result.Data.(string); ok {
-		_result["data"] = result.Data
+		resultMap["data"] = result.Data
 	}
 
 	callers := make([]string, 0, 10)
@@ -162,17 +172,27 @@ func (c *Context) log(result *result.Result, beforeCaller ...string) {
 	if result.Caller() != "" {
 		callers = append(callers, result.Caller())
 	}
+
+	messages := make([]string, 0, 5)
+	level := lo.If(result.Level().String() != "", result.Level()).Else(log.LevelWarn)
+	if level > log.LevelInfo {
+		messages = append(messages, fmt.Sprintf("- **method**: %s", handlerName))
+		messages = append(messages, fmt.Sprintf("- **staus**: %s[%s]", result.Status, result.Msg))
+	}
 	if err, ok := result.Data.(error); ok {
 		result.Data = nil
-		_result["error"] = err.Error()
+		resultMap["error"] = err.Error()
 		callers = append(callers, xerrors.Callers(err)...)
+		messages = append(messages, fmt.Sprintf("- **error**: %s", err))
 	}
+	resultMap["callers"] = callers
 
-	level := lo.If(result.Level().String() != "", result.Level()).Else(log.LevelWarn)
-	log.Context(c).Log(level, "field", map[string]interface{}{
-		"params":      params,
-		"processTime": c.ProcessTime(),
-		"result":      _result,
-		"callers":     callers,
-	})
+	msg := lo.If(len(messages) <= 0, "").Else(fmt.Sprintf(strings.Join(messages, "\n")))
+	log.Context(c).Log(level,
+		log.DefaultMessageKey, msg,
+		"field", map[string]interface{}{
+			"params":      params,
+			"processTime": c.ProcessTime(),
+			"result":      resultMap,
+		})
 }

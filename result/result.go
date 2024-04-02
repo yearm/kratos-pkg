@@ -3,8 +3,10 @@ package result
 import (
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/gogf/gf/v2/util/gconv"
+	"github.com/samber/lo"
 	"github.com/yearm/kratos-pkg/ecode"
 	"github.com/yearm/kratos-pkg/errs"
+	kstatus "github.com/yearm/kratos-pkg/status"
 	"github.com/yearm/kratos-pkg/util/debug"
 	"google.golang.org/grpc/codes"
 	gstatus "google.golang.org/grpc/status"
@@ -102,6 +104,17 @@ func (r *Result) StatusIs(status ecode.Status) bool {
 	return r.Status == status
 }
 
+// StatusIsNotFound ...
+func (r *Result) StatusIsNotFound(status ecode.Status) bool {
+	if r == nil {
+		return false
+	}
+	if lo.Contains([]ecode.Status{ecode.StatusNotFound, ecode.StatusRecordNotFound}, status) {
+		return true
+	}
+	return false
+}
+
 // New ...
 func New(status ecode.Status, data interface{}, opts ...Option) *Result {
 	result := &Result{
@@ -109,7 +122,7 @@ func New(status ecode.Status, data interface{}, opts ...Option) *Result {
 		Msg:       status.Message(),
 		Data:      data,
 		renderTyp: JSON,
-		level:     log.LevelWarn,
+		level:     status.Level(),
 	}
 	if e, ok := data.(*errs.ValidateError); ok {
 		result.Msg = e.Error()
@@ -133,25 +146,25 @@ func FromRPCError(err error, opts ...Option) *Result {
 	var (
 		code   ecode.Status
 		result *Result
-		level  = log.LevelError
 	)
 	defer func() {
 		for _, opt := range opts {
 			opt(result)
 		}
 	}()
+
 	switch status.Code() {
 	case ecode.RPCBusinessError:
 		for _, detail := range status.Details() {
 			if st, ok := detail.(*structpb.Struct); ok {
 				structMap := st.AsMap()
 				result = &Result{
-					Status:    ecode.Status(gconv.String(structMap["status"])),
-					Msg:       gconv.String(structMap["msg"]),
+					Status:    ecode.Status(gconv.String(structMap[kstatus.DetailStatusKey])),
+					Msg:       gconv.String(structMap[kstatus.DetailMessageKey]),
 					Data:      err,
 					renderTyp: JSON,
 					caller:    debug.Caller(2, 3),
-					level:     log.ParseLevel(gconv.String(structMap["level"])),
+					level:     log.ParseLevel(gconv.String(structMap[kstatus.DetailLevelKey])),
 				}
 				return result
 			}
@@ -159,7 +172,6 @@ func FromRPCError(err error, opts ...Option) *Result {
 		code = ecode.StatusInternalServerError
 	case codes.Canceled:
 		code = ecode.StatusCancelled
-		level = log.LevelWarn
 	case codes.Unknown:
 		code = ecode.StatusUnknownError
 	case codes.DeadlineExceeded:
@@ -177,7 +189,7 @@ func FromRPCError(err error, opts ...Option) *Result {
 		Data:      err,
 		renderTyp: JSON,
 		caller:    debug.Caller(2, 3),
-		level:     level,
+		level:     code.Level(),
 	}
 	return result
 }

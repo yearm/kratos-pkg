@@ -1,9 +1,19 @@
 package ecode
 
-import "golang.org/x/exp/maps"
+import (
+	"github.com/go-kratos/kratos/v2/log"
+	"golang.org/x/exp/maps"
+)
 
-// Status ...
-type Status string
+type (
+	// Status ...
+	Status string
+	// statusResult ...
+	statusResult struct {
+		level   log.Level
+		message string
+	}
+)
 
 // String ...
 func (s Status) String() string {
@@ -12,11 +22,16 @@ func (s Status) String() string {
 
 // Message ...
 func (s Status) Message() string {
-	return statusMap[s]
+	return statusMap[s].message
+}
+
+// Level ...
+func (s Status) Level() log.Level {
+	return statusMap[s].level
 }
 
 var (
-	statusMap = map[Status]string{}
+	statusMap = map[Status]statusResult{}
 )
 
 func init() {
