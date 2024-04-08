@@ -26,7 +26,7 @@ import (
 )
 
 // DefaultMiddlewares ...
-var DefaultMiddlewares = []middleware.Middleware{StartAt(), tracing.Server(), Metrics(), Recovery(), Cors(), RateLimit()}
+var DefaultMiddlewares = []middleware.Middleware{StartAt(), tracing.Server(), Metrics(), Recovery(), Cors(), RateLimit(bbr.WithCPUThreshold(900))}
 
 // Middlewares return middlewares wrapper
 func Middlewares(m ...middleware.Middleware) iriscontext.Handler {
@@ -111,8 +111,8 @@ func StartAt() middleware.Middleware {
 }
 
 // RateLimit ...
-func RateLimit() middleware.Middleware {
-	limiter := bbr.NewLimiter()
+func RateLimit(opts ...bbr.Option) middleware.Middleware {
+	limiter := bbr.NewLimiter(opts...)
 	return func(handler middleware.Handler) middleware.Handler {
 		return func(ctx context.Context, req interface{}) (interface{}, error) {
 			done, err := limiter.Allow()

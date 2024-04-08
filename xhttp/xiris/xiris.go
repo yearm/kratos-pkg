@@ -34,7 +34,7 @@ func RegisterOnErrorCode(app *iris.Application, codes ...int) {
 			})
 		case http.StatusTooManyRequests:
 			app.OnErrorCode(http.StatusTooManyRequests, func(c iriscontext.Context) {
-				NewContext(c).Render(ecode.StatusTooManyRequests, nil)
+				NewContext(c).RenderError(ecode.StatusTooManyRequests, nil)
 			})
 		}
 	}

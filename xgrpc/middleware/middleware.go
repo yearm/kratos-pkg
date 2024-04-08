@@ -34,7 +34,7 @@ import (
 
 var (
 	// DefaultServerMiddlewares ...
-	DefaultServerMiddlewares = []middleware.Middleware{StartAt(), tracing.Server(), Log(), Recovery(), metadata.Server(), RateLimit(), Validator()}
+	DefaultServerMiddlewares = []middleware.Middleware{StartAt(), tracing.Server(), Log(), Recovery(), metadata.Server(), RateLimit(bbr.WithCPUThreshold(900)), Validator()}
 	// DefaultClientMiddlewares ...
 	DefaultClientMiddlewares = []middleware.Middleware{Recovery(), tracing.Client(), metadata.Client(), ClientBreaker()}
 )
@@ -104,13 +104,13 @@ func Recovery() middleware.Middleware {
 }
 
 // RateLimit ...
-func RateLimit() middleware.Middleware {
-	limiter := bbr.NewLimiter()
+func RateLimit(opts ...bbr.Option) middleware.Middleware {
+	limiter := bbr.NewLimiter(opts...)
 	return func(handler middleware.Handler) middleware.Handler {
 		return func(ctx context.Context, req interface{}) (reply interface{}, err error) {
 			done, e := limiter.Allow()
 			if e != nil {
-				return nil, status.Error(e, ecode.StatusTooManyRequests)
+				return nil, status.Error(e, ecode.StatusTooManyRequests, log.LevelError)
 			}
 			reply, err = handler(ctx, req)
 			done(ratelimit.DoneInfo{Err: err})
