@@ -26,7 +26,6 @@ func GetRPCClientConn(configPath string, opts ...kgrpc.ClientOption) *grpc.Clien
 	if err != nil {
 		logrus.Panicln(err)
 	}
-	logrus.Infoln("Connecting at", endpoint)
 	return conn
 }
 
@@ -45,12 +44,12 @@ func GetClientConn(endpoint string, timeout int, dialWithCredentials bool, opts 
 var (
 	// connMap ...
 	connMap sync.Map
-	// group ...
-	group singleflight.Group
+	// sg ...
+	sg singleflight.Group
 )
 
 func dial(endpoint string, timeout int, dialWithCredentials bool, opts ...kgrpc.ClientOption) (*grpc.ClientConn, error) {
-	iConn, err, _ := group.Do(endpoint, func() (interface{}, error) {
+	iConn, err, _ := sg.Do(endpoint, func() (interface{}, error) {
 		var (
 			err  error
 			conn *grpc.ClientConn
@@ -60,6 +59,7 @@ func dial(endpoint string, timeout int, dialWithCredentials bool, opts ...kgrpc.
 		}
 		defer func() {
 			if conn != nil {
+				logrus.Infoln("Connecting at", endpoint)
 				connMap.Store(endpoint, conn)
 			}
 		}()
