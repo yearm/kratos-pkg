@@ -38,8 +38,7 @@ func NewLogger() (klog.Logger, func()) {
 
 	producerConfig := producer.GetDefaultProducerConfig()
 	producerConfig.Endpoint = endpoint
-	producerConfig.AccessKeyID = accessKey
-	producerConfig.AccessKeySecret = secretKey
+	producerConfig.CredentialsProvider = sls.NewStaticCredentialsProvider(accessKey, secretKey, "")
 	producerInst := producer.InitProducer(producerConfig)
 	producerInst.Start()
 

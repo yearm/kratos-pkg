@@ -125,55 +125,49 @@ func NewGRPCServer(opts ...kgrpc.ServerOption) *kgrpc.Server {
 ```go
 var (
 	connMap sync.Map
-	connLock sync.Mutex
+	sg singleflight.Group
 )
 
-func GetRPCClientConn(configPath string, opts ...kgrpc.ClientOption) *grpc.ClientConn {
-	var (
-		err  error
-		conn *grpc.ClientConn
-	)
-
-	connLock.Lock()
-	defer connLock.Unlock()
-	if v, ok := connMap.Load(configPath); ok {
-		return v.(*grpc.ClientConn)
-	}
-	defer func() {
-		if conn != nil {
-			connMap.Store(configPath, conn)
+func dial(endpoint string, timeout int, dialWithCredentials bool, opts ...kgrpc.ClientOption) (*grpc.ClientConn, error) {
+	iConn, err, _ := sg.Do(endpoint, func() (interface{}, error) {
+		var (
+			err  error
+			conn *grpc.ClientConn
+		)
+		if conn, ok := connMap.Load(endpoint); ok {
+			return conn, nil
 		}
-	}()
+		defer func() {
+			if conn != nil {
+				logrus.Infoln("Connecting at", endpoint)
+				connMap.Store(endpoint, conn)
+			}
+		}()
 
-	endpoint := viper.GetString(fmt.Sprintf("%s.endpoint", configPath))
-	if endpoint == "" {
-		logrus.Panicln("endpoint is nil, config path:", configPath)
-	}
-	timeout := viper.GetInt(fmt.Sprintf("%s.timeout", configPath))
-	dialWithCredentials := viper.GetBool(fmt.Sprintf("%s.dialWithCredentials", configPath))
+		clientOpts := []kgrpc.ClientOption{kgrpc.WithEndpoint(endpoint)}
+		if timeout >= 0 {
+			clientOpts = append(clientOpts, kgrpc.WithTimeout(time.Duration(timeout)*time.Second))
+		}
+		if d := registry.NewDiscovery(); d != nil {
+			clientOpts = append(clientOpts, kgrpc.WithDiscovery(d))
+		}
+		clientOpts = append(clientOpts, opts...)
 
-	clientOpts := []kgrpc.ClientOption{kgrpc.WithEndpoint(endpoint)}
-	clientOpts = append(clientOpts, opts...)
-	if d := registry.NewDiscovery(); d != nil {
-		clientOpts = append(clientOpts, kgrpc.WithDiscovery(d))
-	}
-
-	if timeout >= 0 {
-		clientOpts = append(clientOpts, kgrpc.WithTimeout(time.Duration(timeout)*time.Second))
-	}
-
-	if dialWithCredentials {
-		clientOpts = append(clientOpts, kgrpc.WithTLSConfig(&tls.Config{}))
-		conn, err = kgrpc.Dial(context.Background(), clientOpts...)
-	} else {
-		conn, err = kgrpc.DialInsecure(context.Background(), clientOpts...)
-	}
-
+		if dialWithCredentials {
+			clientOpts = append(clientOpts, kgrpc.WithTLSConfig(&tls.Config{}))
+			conn, err = kgrpc.Dial(context.Background(), clientOpts...)
+		} else {
+			conn, err = kgrpc.DialInsecure(context.Background(), clientOpts...)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("grpc dial error: %s", err)
+		}
+		return conn, nil
+	})
 	if err != nil {
-		logrus.Panicln("grpc dial error:", err)
+		return nil, err
 	}
-	logrus.Infoln("Connecting at", endpoint)
-	return conn
+	return iConn.(*grpc.ClientConn), nil
 }
 ```
 
@@ -195,7 +189,8 @@ func Validator() middleware.Middleware {
 	return func(handler middleware.Handler) middleware.Handler {
 		return func(ctx context.Context, req interface{}) (reply interface{}, err error) {
 			if _err := validate.Struct(req); _err != nil {
-				if fieldErrors, ok := (_err).(validator.ValidationErrors); ok {
+				var fieldErrors validator.ValidationErrors
+				if errors.As(_err, &fieldErrors) {
 					for _, fieldError := range fieldErrors {
 						var errMsg string
 						translateValue := fieldError.Translate(trans)
@@ -231,17 +226,18 @@ func Error(err error, status ecode.Status, levels ...log.Level) error {
 		errMsg = err.Error()
 	}
 
-	callers := errors.Callers(err)
-	_callers := make([]interface{}, 0, len(callers)+1)
-	_callers = append(_callers, debug.Caller(2, 3))
-	_callers = append(_callers, gconv.Interfaces(callers)...)
-	_struct, _ := structpb.NewStruct(map[string]interface{}{
-		"status":  status.String(),
-		"msg":     status.Message(),
-		"level":   level(levels...).String(),
-		"callers": _callers,
+	errCallers := xerrors.Callers(err)
+	callers := make([]interface{}, 0, len(errCallers)+1)
+	callers = append(callers, debug.Caller(2, 3))
+	callers = append(callers, gconv.Interfaces(errCallers)...)
+	level := lo.If(len(levels) == 0, status.Level()).ElseF(func() log.Level { return levels[0] })
+	detail, _ := structpb.NewStruct(map[string]interface{}{
+		DetailStatusKey:  status.String(),
+		DetailMessageKey: status.Message(),
+		DetailLevelKey:   level.String(),
+		DetailCallersKey: callers,
 	})
-	st, _ := gstatus.New(ecode.RPCBusinessError, fmt.Sprintf("[%s]%s", env.GetServiceName(), errMsg)).WithDetails(_struct)
+	st, _ := gstatus.New(ecode.RPCBusinessError, fmt.Sprintf("[%s] %s", env.GetServiceName(), errMsg)).WithDetails(detail)
 	return st.Err()
 }
 
@@ -251,8 +247,8 @@ func FromError(err error) (*gstatus.Status, *structpb.Struct) {
 	}
 	if st, ok := gstatus.FromError(err); ok {
 		for _, detail := range st.Details() {
-			if _struct, ok := detail.(*structpb.Struct); ok {
-				return st, _struct
+			if detailSt, ok := detail.(*structpb.Struct); ok {
+				return st, detailSt
 			}
 		}
 		return st, nil
@@ -275,25 +271,25 @@ func FromRPCError(err error, opts ...Option) *Result {
 	var (
 		code   ecode.Status
 		result *Result
-		level  = log.LevelError
 	)
 	defer func() {
 		for _, opt := range opts {
 			opt(result)
 		}
 	}()
+
 	switch status.Code() {
 	case ecode.RPCBusinessError:
 		for _, detail := range status.Details() {
 			if st, ok := detail.(*structpb.Struct); ok {
 				structMap := st.AsMap()
 				result = &Result{
-					Status:    ecode.Status(gconv.String(structMap["status"])),
-					Msg:       gconv.String(structMap["msg"]),
+					Status:    ecode.Status(gconv.String(structMap[kstatus.DetailStatusKey])),
+					Msg:       gconv.String(structMap[kstatus.DetailMessageKey]),
 					Data:      err,
 					renderTyp: JSON,
 					caller:    debug.Caller(2, 3),
-					level:     log.ParseLevel(gconv.String(structMap["level"])),
+					level:     log.ParseLevel(gconv.String(structMap[kstatus.DetailLevelKey])),
 				}
 				return result
 			}
@@ -301,7 +297,6 @@ func FromRPCError(err error, opts ...Option) *Result {
 		code = ecode.StatusInternalServerError
 	case codes.Canceled:
 		code = ecode.StatusCancelled
-		level = log.LevelWarn
 	case codes.Unknown:
 		code = ecode.StatusUnknownError
 	case codes.DeadlineExceeded:
@@ -319,7 +314,7 @@ func FromRPCError(err error, opts ...Option) *Result {
 		Data:      err,
 		renderTyp: JSON,
 		caller:    debug.Caller(2, 3),
-		level:     level,
+		level:     code.Level(),
 	}
 	return result
 }
