@@ -160,6 +160,9 @@ func Log() middleware.Middleware {
 					result["grpcCode"] = st.Code()
 					result["error"] = st.Err().Error()
 					level = log.LevelError
+
+					messages := make([]string, 0, 5)
+					messages = append(messages, fmt.Sprintf("- **method**: %s", tr.Operation()))
 					if detail != nil {
 						detailMap := detail.AsMap()
 						for k, v := range detailMap {
@@ -168,12 +171,10 @@ func Log() middleware.Middleware {
 							}
 							result[k] = v
 						}
-						messages := make([]string, 0, 5)
-						messages = append(messages, fmt.Sprintf("- **method**: %s", tr.Operation()))
 						messages = append(messages, fmt.Sprintf("- **status**: %s[%s]", detailMap[status.DetailStatusKey], detailMap[status.DetailMessageKey]))
-						messages = append(messages, fmt.Sprintf("- **error**: %s", st.Err()))
-						errMsg = fmt.Sprintf(strings.Join(messages, "\n"))
 					}
+					messages = append(messages, fmt.Sprintf("- **error**: %s", st.Err()))
+					errMsg = fmt.Sprintf(strings.Join(messages, "\n"))
 				}
 
 				var processTime int64
