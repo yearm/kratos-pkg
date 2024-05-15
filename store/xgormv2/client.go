@@ -124,31 +124,31 @@ func (a *aliyunLogger) Trace(ctx context.Context, begin time.Time, fc func() (sq
 		sql, rows := fc()
 		if rows == -1 {
 			if errors.Is(err, logger.ErrRecordNotFound) {
-				log.Context(ctx).Infof("%s [%.3fms] [rows:%v] %s", err, float64(elapsed.Nanoseconds())/1e6, "-", sql)
+				a.Info(ctx, "%s [%.3fms] [rows:%v] %s", err, float64(elapsed.Nanoseconds())/1e6, "-", sql)
 			} else {
-				log.Context(ctx).Errorf("%s [%.3fms] [rows:%v] %s", err, float64(elapsed.Nanoseconds())/1e6, "-", sql)
+				a.Error(ctx, "%s [%.3fms] [rows:%v] %s", err, float64(elapsed.Nanoseconds())/1e6, "-", sql)
 			}
 		} else {
 			if errors.Is(err, logger.ErrRecordNotFound) {
-				log.Context(ctx).Infof("%s [%.3fms] [rows:%v] %s", err, float64(elapsed.Nanoseconds())/1e6, rows, sql)
+				a.Info(ctx, "%s [%.3fms] [rows:%v] %s", err, float64(elapsed.Nanoseconds())/1e6, rows, sql)
 			} else {
-				log.Context(ctx).Errorf("%s [%.3fms] [rows:%v] %s", err, float64(elapsed.Nanoseconds())/1e6, rows, sql)
+				a.Error(ctx, "%s [%.3fms] [rows:%v] %s", err, float64(elapsed.Nanoseconds())/1e6, rows, sql)
 			}
 		}
 	case elapsed > a.SlowThreshold && a.SlowThreshold != 0 && a.LogLevel >= logger.Warn:
 		sql, rows := fc()
 		slowLog := fmt.Sprintf("SLOW SQL >= %v", a.SlowThreshold)
 		if rows == -1 {
-			log.Context(ctx).Warnf("%s [%.3fms] [rows:%v] %s", slowLog, float64(elapsed.Nanoseconds())/1e6, "-", sql)
+			a.Warn(ctx, "%s [%.3fms] [rows:%v] %s", slowLog, float64(elapsed.Nanoseconds())/1e6, "-", sql)
 		} else {
-			log.Context(ctx).Warnf("%s [%.3fms] [rows:%v] %s", slowLog, float64(elapsed.Nanoseconds())/1e6, rows, sql)
+			a.Warn(ctx, "%s [%.3fms] [rows:%v] %s", slowLog, float64(elapsed.Nanoseconds())/1e6, rows, sql)
 		}
 	case a.LogLevel == logger.Info:
 		sql, rows := fc()
 		if rows == -1 {
-			log.Context(ctx).Infof("[%.3fms] [rows:%v] %s", float64(elapsed.Nanoseconds())/1e6, "-", sql)
+			a.Info(ctx, "[%.3fms] [rows:%v] %s", float64(elapsed.Nanoseconds())/1e6, "-", sql)
 		} else {
-			log.Context(ctx).Infof("[%.3fms] [rows:%v] %s", float64(elapsed.Nanoseconds())/1e6, rows, sql)
+			a.Info(ctx, "[%.3fms] [rows:%v] %s", float64(elapsed.Nanoseconds())/1e6, rows, sql)
 		}
 	}
 }
