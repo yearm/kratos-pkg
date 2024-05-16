@@ -67,6 +67,7 @@ func dial(endpoint string, timeout int, dialWithCredentials bool, opts ...kgrpc.
 		clientOpts := []kgrpc.ClientOption{
 			kgrpc.WithEndpoint(endpoint),
 			kgrpc.WithOptions(grpc.WithIdleTimeout(0)),
+			kgrpc.WithPrintDiscoveryDebugLog(false),
 		}
 		if timeout >= 0 {
 			clientOpts = append(clientOpts, kgrpc.WithTimeout(time.Duration(timeout)*time.Second))
