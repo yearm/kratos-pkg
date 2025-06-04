@@ -2,94 +2,78 @@ package xgrpc
 
 import (
 	"context"
-	"crypto/tls"
-	"fmt"
+	ctls "crypto/tls"
 	kgrpc "github.com/go-kratos/kratos/v2/transport/grpc"
-	"github.com/sirupsen/logrus"
-	"github.com/spf13/viper"
-	"github.com/yearm/kratos-pkg/registry"
+	"github.com/yearm/kratos-pkg/config/gconfig"
+	"github.com/yearm/kratos-pkg/errors"
 	"golang.org/x/sync/singleflight"
 	"google.golang.org/grpc"
+	"log"
 	"sync"
 	"time"
 )
 
-// GetRPCClientConn 配置结构规则 config/env/env.go:58
-func GetRPCClientConn(configPath string, opts ...kgrpc.ClientOption) *grpc.ClientConn {
-	endpoint := viper.GetString(fmt.Sprintf("%s.endpoint", configPath))
-	timeout := viper.GetInt(fmt.Sprintf("%s.timeout", configPath))
-	dialWithCredentials := viper.GetBool(fmt.Sprintf("%s.dialWithCredentials", configPath))
-	if endpoint == "" {
-		logrus.Panicln("endpoint is nil, config path:", configPath)
-	}
-	conn, err := dial(endpoint, timeout, dialWithCredentials, opts...)
-	if err != nil {
-		logrus.Panicln(err)
-	}
-	return conn
-}
-
-// GetClientConn ...
-func GetClientConn(endpoint string, timeout int, dialWithCredentials bool, opts ...kgrpc.ClientOption) (*grpc.ClientConn, error) {
-	if endpoint == "" {
-		return nil, fmt.Errorf("endpoint is nil")
-	}
-	conn, err := dial(endpoint, timeout, dialWithCredentials, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return conn, nil
-}
-
 var (
-	// connMap ...
+	// connMap thread-safe cache for storing gRPC connections keyed by endpoint.
 	connMap sync.Map
-	// sg ...
+
+	// sg deduplicates concurrent connection requests.
 	sg singleflight.Group
 )
 
-func dial(endpoint string, timeout int, dialWithCredentials bool, opts ...kgrpc.ClientOption) (*grpc.ClientConn, error) {
-	iConn, err, _ := sg.Do(endpoint, func() (interface{}, error) {
-		var (
-			err  error
-			conn *grpc.ClientConn
-		)
-		if conn, ok := connMap.Load(endpoint); ok {
-			return conn, nil
-		}
-		defer func() {
-			if conn != nil {
-				logrus.Infoln("Connecting at", endpoint)
-				connMap.Store(endpoint, conn)
-			}
-		}()
+// GetGRPCClientConnByConfigKey creates a grpc client conn by config key.
+func GetGRPCClientConnByConfigKey(key string, opts ...kgrpc.ClientOption) (*grpc.ClientConn, error) {
+	c, err := gconfig.GetClientGRPCConfig(key)
+	if err != nil {
+		return nil, errors.Wrap(err, "gconfig.GetClientGRPCConfig failed")
+	}
+	return GetGRPCClientConn(c.Endpoint, c.Timeout, c.TLS, opts...)
+}
 
-		clientOpts := []kgrpc.ClientOption{
+// GetGRPCClientConn creates a grpc client conn.
+func GetGRPCClientConn(endpoint string, timeout int, tls bool, opts ...kgrpc.ClientOption) (*grpc.ClientConn, error) {
+	if endpoint == "" {
+		return nil, errors.New("endpoint is required")
+	}
+
+	c, err, _ := sg.Do(endpoint, func() (interface{}, error) {
+		if c, ok := connMap.Load(endpoint); ok {
+			return c, nil
+		}
+
+		baseOptions := []kgrpc.ClientOption{
 			kgrpc.WithEndpoint(endpoint),
-			kgrpc.WithOptions(grpc.WithIdleTimeout(0)),
+			kgrpc.WithTimeout(time.Duration(timeout) * time.Second),
+			kgrpc.WithOptions(
+				grpc.WithIdleTimeout(0), // disable idle timeout
+			),
 			kgrpc.WithPrintDiscoveryDebugLog(false),
 		}
-		if timeout >= 0 {
-			clientOpts = append(clientOpts, kgrpc.WithTimeout(time.Duration(timeout)*time.Second))
-		}
-		if d := registry.NewDiscovery(); d != nil {
-			clientOpts = append(clientOpts, kgrpc.WithDiscovery(d))
-		}
-		clientOpts = append(clientOpts, opts...)
+		clientOptions := append(baseOptions, opts...)
 
-		if dialWithCredentials {
-			clientOpts = append(clientOpts, kgrpc.WithTLSConfig(&tls.Config{}))
-			conn, err = kgrpc.Dial(context.Background(), clientOpts...)
+		var (
+			conn *grpc.ClientConn
+			err  error
+		)
+		if tls {
+			clientOptions = append(clientOptions, kgrpc.WithTLSConfig(&ctls.Config{}))
+			conn, err = kgrpc.Dial(context.Background(), clientOptions...)
+			if err != nil {
+				return nil, errors.Wrap(err, "grpc.Dial failed")
+			}
 		} else {
-			conn, err = kgrpc.DialInsecure(context.Background(), clientOpts...)
+			conn, err = kgrpc.DialInsecure(context.Background(), clientOptions...)
+			if err != nil {
+				return nil, errors.Wrap(err, "grpc.DialInsecure failed")
+			}
 		}
-		if err != nil {
-			return nil, fmt.Errorf("grpc dial error: %s", err)
-		}
+
+		log.Println("Connecting at", endpoint)
+		connMap.Store(endpoint, conn)
 		return conn, nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "GetGRPCClientConn failed")
 	}
-	return iConn.(*grpc.ClientConn), nil
+	return c.(*grpc.ClientConn), nil
 }

@@ -2,36 +2,20 @@ package kratospkg
 
 import (
 	"github.com/go-kratos/kratos/v2"
-	kregistry "github.com/go-kratos/kratos/v2/registry"
 	"github.com/go-kratos/kratos/v2/transport"
-	"github.com/go-kratos/kratos/v2/transport/grpc"
-	"github.com/go-kratos/kratos/v2/transport/http"
-	"github.com/yearm/kratos-pkg/config/env"
-	_ "github.com/yearm/kratos-pkg/log"
+	"github.com/yearm/kratos-pkg/env"
 	_ "go.uber.org/automaxprocs"
 )
 
-// NewHttpApp ...
-func NewHttpApp(hs []*http.Server) *kratos.App {
-	ts := make([]transport.Server, 0)
-	for _, h := range hs {
-		ts = append(ts, h)
+// NewApp creates a kratos application.
+func NewApp(ss []transport.Server, opts ...kratos.Option) *kratos.App {
+	options := []kratos.Option{
+		kratos.ID(env.GetServiceID()),
+		kratos.Name(env.GetServiceName()),
+		kratos.Version(env.GetServiceVersion()),
+		kratos.Metadata(env.GetServiceMetadata()),
+		kratos.Server(ss...),
 	}
-	return kratos.New(
-		kratos.ID(env.GetServiceInstanceID()),
-		kratos.Name(env.GetServiceName()),
-		kratos.Version(env.GetServiceVersion()),
-		kratos.Server(ts...),
-	)
-}
-
-// NewGRPCApp ...
-func NewGRPCApp(reg kregistry.Registrar, gs *grpc.Server, ms *http.Server) *kratos.App {
-	return kratos.New(
-		kratos.ID(env.GetServiceInstanceID()),
-		kratos.Name(env.GetServiceName()),
-		kratos.Version(env.GetServiceVersion()),
-		kratos.Server(gs, ms),
-		kratos.Registrar(reg),
-	)
+	options = append(options, opts...)
+	return kratos.New(options...)
 }

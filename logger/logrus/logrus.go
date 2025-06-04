@@ -1,22 +1,40 @@
-package llogger
+package logrus
 
 import (
 	klogrus "github.com/go-kratos/kratos/contrib/log/logrus/v2"
-	klog "github.com/go-kratos/kratos/v2/log"
+	"github.com/go-kratos/kratos/v2/log"
 	"github.com/sirupsen/logrus"
-	"os"
+	"io"
+	"time"
 )
 
-// NewLogger ...
-func NewLogger() (klog.Logger, func()) {
-	logger := logrus.New()
-
-	logger.SetLevel(logrus.DebugLevel)
-	logger.SetOutput(os.Stdout)
-	logger.SetFormatter(&logrus.JSONFormatter{
-		DisableTimestamp:  true,
+// NewLogger creates a logrus logger.
+func NewLogger(w io.Writer, level logrus.Level) (log.Logger, func()) {
+	l := logrus.New()
+	l.SetLevel(level)
+	l.SetOutput(w)
+	l.SetFormatter(&logrus.JSONFormatter{
+		TimestampFormat:   time.RFC3339,
 		DisableHTMLEscape: true,
-		// PrettyPrint:       true,
 	})
-	return klogrus.NewLogger(logger), func() { logrus.Println("logrus logger graceful close") }
+	logger := klogrus.NewLogger(l)
+	return logger, func() {}
+}
+
+// ParseLevel parse level to logrus level.
+func ParseLevel(level log.Level) logrus.Level {
+	switch level {
+	case log.LevelDebug:
+		return logrus.DebugLevel
+	case log.LevelInfo:
+		return logrus.InfoLevel
+	case log.LevelWarn:
+		return logrus.WarnLevel
+	case log.LevelError:
+		return logrus.ErrorLevel
+	case log.LevelFatal:
+		return logrus.FatalLevel
+	default:
+		return logrus.InfoLevel
+	}
 }

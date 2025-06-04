@@ -2,65 +2,90 @@ package xhttp
 
 import (
 	"fmt"
-	thttp "github.com/go-kratos/kratos/v2/transport/http"
-	"github.com/gogf/gf/v2/net/gtcp"
-	"github.com/kataras/iris/v12"
+	"github.com/gin-gonic/gin"
+	khttp "github.com/go-kratos/kratos/v2/transport/http"
+	"github.com/gorilla/handlers"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/spf13/viper"
-	"github.com/yearm/kratos-pkg/config/env"
+	"github.com/yearm/kratos-pkg/config/gconfig"
+	"github.com/yearm/kratos-pkg/errors"
+	"github.com/yearm/kratos-pkg/utils/net"
 	"net/http"
 	"net/http/pprof"
 	"time"
 )
 
-// NewHTTPServer ...
-func NewHTTPServer(handler http.Handler, configPath ...string) (*thttp.Server, error) {
-	opts := make([]thttp.ServerOption, 0)
-	var (
-		httpHost              string
-		httpPort, httpTimeout int
-	)
-	if len(configPath) > 0 {
-		_configPath := configPath[0]
-		httpHost = viper.GetString(fmt.Sprintf("%s.host", _configPath))
-		httpPort = viper.GetInt(fmt.Sprintf("%s.port", _configPath))
-		httpTimeout = viper.GetInt(fmt.Sprintf("%s.timeout", _configPath))
-	} else {
-		httpHost = env.GetHttpHost()
-		httpPort = env.GetHttpPort()
-		httpTimeout = env.GetHttpTimeout()
+// NewHTTPServer creates an http server.
+func NewHTTPServer(handler http.Handler, opts ...khttp.ServerOption) (*khttp.Server, error) {
+	return newHTTPServer(handler, "", opts...)
+}
+
+// NewHTTPServerByConfigKey creates an http server by config key.
+func NewHTTPServerByConfigKey(handler http.Handler, configKey string, opts ...khttp.ServerOption) (*khttp.Server, error) {
+	return newHTTPServer(handler, configKey, opts...)
+}
+
+// newHTTPServer creates an http server by config key.
+func newHTTPServer(handler http.Handler, configKey string, opts ...khttp.ServerOption) (*khttp.Server, error) {
+	c, err := gconfig.GetServerHTTPConfig()
+	if err != nil {
+		return nil, errors.Wrap(err, "gconfig.GetServerHTTPConfig failed")
 	}
-	if httpHost != "" && httpPort > 0 {
-		opts = append(opts, thttp.Address(fmt.Sprintf("%s:%d", httpHost, httpPort)))
+	if configKey != "" {
+		err = gconfig.Value(configKey).Scan(&c)
+		if err != nil {
+			return nil, errors.Wrapf(err, "scan config[%v] failed", configKey)
+		}
 	}
-	if httpTimeout >= 0 {
-		// NOTE: context 的超时时间
-		opts = append(opts, thttp.Timeout(time.Duration(httpTimeout)*time.Second))
+
+	baseOptions := []khttp.ServerOption{
+		khttp.Address(fmt.Sprintf("%s:%d", c.Host, c.Port)),
+		khttp.Timeout(time.Duration(c.Timeout) * time.Second),
 	}
-	httpSrv := thttp.NewServer(opts...)
+	if c.Cors != nil {
+		opts := []handlers.CORSOption{
+			handlers.AllowedOrigins(c.Cors.AllowOrigins),
+			handlers.AllowedMethods(c.Cors.AllowMethods),
+			handlers.AllowedHeaders(c.Cors.AllowHeaders),
+			handlers.ExposedHeaders(c.Cors.ExposeHeaders),
+			handlers.MaxAge(c.Cors.MaxAge),
+		}
+		if c.Cors.AllowCredentials {
+			opts = append(opts, handlers.AllowCredentials())
+		}
+		baseOptions = append(baseOptions, khttp.Filter(handlers.CORS(opts...)))
+	}
+	serverOptions := append(baseOptions, opts...)
+	httpSrv := khttp.NewServer(serverOptions...)
 
 	switch app := handler.(type) {
-	case *iris.Application:
+	case *gin.Engine:
 		httpSrv.HandlePrefix("/", app)
-		return httpSrv, app.Build()
+		return httpSrv, nil
+	case nil:
+		return httpSrv, nil
 	default:
-		return nil, fmt.Errorf("unsupported http.Handler")
+		return nil, errors.Errorf("unsupported http.Handler")
 	}
 }
 
-// NewMonitorHTTPServer ...
-func NewMonitorHTTPServer() (*thttp.Server, error) {
-	httpHost := env.GetMonitorHttpHost()
-	httpPort := env.GetMonitorHttpPort()
-	if httpPort <= 0 {
-		httpPort = gtcp.MustGetFreePort()
+// NewMonitorHTTPServer creates a monitor HTTP server.
+func NewMonitorHTTPServer() (*khttp.Server, error) {
+	c, err := gconfig.GetServerMonitorHTTPConfig()
+	if err != nil {
+		return nil, errors.Wrap(err, "gconfig.NewMonitorHTTPServer failed")
 	}
-	opts := make([]thttp.ServerOption, 0)
-	if env.GetMonitorHttpHost() != "" && httpPort > 0 {
-		opts = append(opts, thttp.Address(fmt.Sprintf("%s:%d", httpHost, httpPort)))
+	if c.Port <= 0 {
+		port, err := net.GetFreePort()
+		if err != nil {
+			return nil, errors.Wrap(err, "net.GetFreePort failed")
+		}
+		c.Port = port
 	}
-	opts = append(opts, thttp.Timeout(0))
-	httpServer := thttp.NewServer(opts...)
+	opts := []khttp.ServerOption{
+		khttp.Address(fmt.Sprintf("%s:%d", c.Host, c.Port)),
+		khttp.Timeout(0),
+	}
+	httpServer := khttp.NewServer(opts...)
 	httpServer.HandleFunc("/debug/pprof/", pprof.Index)
 	httpServer.HandleFunc("/debug/pprof/allocs", pprof.Index)
 	httpServer.HandleFunc("/debug/pprof/block", pprof.Index)
