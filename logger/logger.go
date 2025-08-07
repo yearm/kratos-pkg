@@ -2,6 +2,11 @@ package logger
 
 import (
 	"context"
+	"io"
+	"os"
+	"path/filepath"
+	"time"
+
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/go-kratos/kratos/v2/middleware/tracing"
 	"github.com/samber/lo"
@@ -13,10 +18,6 @@ import (
 	"github.com/yearm/kratos-pkg/logger/zap"
 	"github.com/yearm/kratos-pkg/utils/debug"
 	"github.com/yearm/kratos-pkg/utils/net"
-	"io"
-	"os"
-	"path/filepath"
-	"time"
 )
 
 // Type is a logger type.

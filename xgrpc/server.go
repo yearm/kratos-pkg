@@ -2,6 +2,7 @@ package xgrpc
 
 import (
 	"fmt"
+
 	kgrpc "github.com/go-kratos/kratos/v2/transport/grpc"
 	"github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/yearm/kratos-pkg/config/gconfig"

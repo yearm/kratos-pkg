@@ -1,9 +1,10 @@
 package gconfig
 
 import (
+	"sync"
+
 	"github.com/samber/lo"
 	"github.com/yearm/kratos-pkg/errors"
-	"sync"
 )
 
 const (

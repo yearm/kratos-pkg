@@ -1,8 +1,9 @@
 package gconfig
 
 import (
-	"github.com/yearm/kratos-pkg/errors"
 	"sync"
+
+	"github.com/yearm/kratos-pkg/errors"
 )
 
 var (

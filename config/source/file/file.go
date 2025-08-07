@@ -1,10 +1,11 @@
 package file
 
 import (
+	"os"
+
 	"github.com/go-kratos/kratos/v2/config"
 	"github.com/go-kratos/kratos/v2/config/file"
 	"github.com/go-kratos/kratos/v2/log"
-	"os"
 )
 
 // NewConfigSource creates a file config source.

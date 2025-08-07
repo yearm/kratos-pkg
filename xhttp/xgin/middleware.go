@@ -4,6 +4,12 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
+	"net/http"
+	"runtime"
+	"strings"
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/go-kratos/aegis/ratelimit"
 	"github.com/go-kratos/aegis/ratelimit/bbr"
@@ -17,11 +23,6 @@ import (
 	"github.com/yearm/kratos-pkg/utils/bytesconv"
 	"github.com/yearm/kratos-pkg/utils/gjson"
 	"github.com/yearm/kratos-pkg/xhttp/api"
-	"io"
-	"net/http"
-	"runtime"
-	"strings"
-	"time"
 )
 
 // MiddlewareOption middleware option.

@@ -2,6 +2,10 @@ package aliyun
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
+	"time"
+
 	sls "github.com/aliyun/aliyun-log-go-sdk"
 	"github.com/aliyun/aliyun-log-go-sdk/producer"
 	"github.com/go-kratos/kratos/v2/log"
@@ -10,9 +14,6 @@ import (
 	"github.com/yearm/kratos-pkg/utils/bytesconv"
 	"github.com/yearm/kratos-pkg/utils/gjson"
 	"google.golang.org/protobuf/proto"
-	"strconv"
-	"strings"
-	"time"
 )
 
 // Config configuration parameters of aliyun logger client.

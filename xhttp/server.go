@@ -2,6 +2,10 @@ package xhttp
 
 import (
 	"fmt"
+	"net/http"
+	"net/http/pprof"
+	"time"
+
 	"github.com/gin-gonic/gin"
 	khttp "github.com/go-kratos/kratos/v2/transport/http"
 	"github.com/gorilla/handlers"
@@ -9,9 +13,6 @@ import (
 	"github.com/yearm/kratos-pkg/config/gconfig"
 	"github.com/yearm/kratos-pkg/errors"
 	"github.com/yearm/kratos-pkg/utils/net"
-	"net/http"
-	"net/http/pprof"
-	"time"
 )
 
 // NewHTTPServer creates an http server.

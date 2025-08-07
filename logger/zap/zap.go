@@ -1,11 +1,12 @@
 package zap
 
 import (
+	"io"
+
 	kzap "github.com/go-kratos/kratos/contrib/log/zap/v2"
 	"github.com/go-kratos/kratos/v2/log"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"io"
 )
 
 // NewLogger creates a zap logger.

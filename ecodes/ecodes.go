@@ -2,9 +2,10 @@ package ecodes
 
 import (
 	"context"
+	"sync"
+
 	"github.com/go-kratos/kratos/v2/log"
 	"google.golang.org/grpc/codes"
-	"sync"
 )
 
 // Code define the types of business error codes.

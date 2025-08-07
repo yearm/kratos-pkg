@@ -1,11 +1,12 @@
 package logrus
 
 import (
+	"io"
+	"time"
+
 	klogrus "github.com/go-kratos/kratos/contrib/log/logrus/v2"
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/sirupsen/logrus"
-	"io"
-	"time"
 )
 
 // NewLogger creates a logrus logger.

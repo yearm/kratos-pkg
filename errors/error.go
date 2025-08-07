@@ -3,8 +3,9 @@ package errors
 import (
 	"errors"
 	"fmt"
-	"github.com/yearm/kratos-pkg/utils/debug"
 	"strings"
+
+	"github.com/yearm/kratos-pkg/utils/debug"
 )
 
 // withCaller is an error wrapper type that captures error context.

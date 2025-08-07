@@ -1,8 +1,9 @@
 package net
 
 import (
-	"github.com/yearm/kratos-pkg/errors"
 	"net"
+
+	"github.com/yearm/kratos-pkg/errors"
 )
 
 // GetIPArray retrieves and returns all the ip of current host.

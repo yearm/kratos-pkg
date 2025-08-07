@@ -1,6 +1,11 @@
 package nacos
 
 import (
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+
 	"github.com/go-kratos/kratos/contrib/config/nacos/v2"
 	kconfig "github.com/go-kratos/kratos/v2/config"
 	"github.com/go-kratos/kratos/v2/encoding"
@@ -8,10 +13,6 @@ import (
 	"github.com/nacos-group/nacos-sdk-go/common/constant"
 	"github.com/nacos-group/nacos-sdk-go/vo"
 	"github.com/yearm/kratos-pkg/errors"
-	"io"
-	"os"
-	"path/filepath"
-	"strings"
 )
 
 type Nacos struct {

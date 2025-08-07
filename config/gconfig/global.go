@@ -1,8 +1,9 @@
 package gconfig
 
 import (
-	"github.com/go-kratos/kratos/v2/config"
 	"sync"
+
+	"github.com/go-kratos/kratos/v2/config"
 )
 
 // globalConfig holds the application's global configuration state.

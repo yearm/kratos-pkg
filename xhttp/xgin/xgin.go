@@ -3,6 +3,7 @@ package xgin
 import (
 	"context"
 	"fmt"
+
 	"github.com/gin-gonic/gin"
 	"github.com/yearm/kratos-pkg/xhttp/api"
 )

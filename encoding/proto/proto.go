@@ -2,6 +2,7 @@ package proto
 
 import (
 	"encoding/json"
+
 	"github.com/samber/lo"
 	"github.com/yearm/kratos-pkg/errors"
 	"google.golang.org/protobuf/encoding/protojson"

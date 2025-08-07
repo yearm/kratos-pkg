@@ -3,6 +3,10 @@ package xgrpc
 import (
 	"context"
 	"fmt"
+	"runtime"
+	"strings"
+	"time"
+
 	"github.com/go-kratos/aegis/circuitbreaker"
 	"github.com/go-kratos/aegis/circuitbreaker/sre"
 	"github.com/go-kratos/aegis/ratelimit"
@@ -23,9 +27,6 @@ import (
 	"google.golang.org/grpc/peer"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
-	"runtime"
-	"strings"
-	"time"
 )
 
 var (
