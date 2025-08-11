@@ -41,6 +41,11 @@ const (
 	Unauthorized
 )
 
+// Is check whether the target code is equal to the code.
+func (c Code) Is(code Code) bool {
+	return c == code
+}
+
 // CodeDetail define the detailed information structure of the error code.
 type CodeDetail struct {
 	Message string
