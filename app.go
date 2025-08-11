@@ -8,7 +8,7 @@ import (
 )
 
 // NewApp creates a kratos application.
-func NewApp(ss []transport.Server, opts ...kratos.Option) *kratos.App {
+func NewApp(ss []transport.Server, opts []kratos.Option) *kratos.App {
 	options := []kratos.Option{
 		kratos.ID(env.GetServiceID()),
 		kratos.Name(env.GetServiceName()),
